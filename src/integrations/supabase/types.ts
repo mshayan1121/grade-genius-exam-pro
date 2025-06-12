@@ -9,7 +9,109 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
-      [_ in never]: never
+      exams: {
+        Row: {
+          board: string
+          created_at: string
+          id: string
+          name: string
+          qualification: string
+          subject: string
+        }
+        Insert: {
+          board: string
+          created_at?: string
+          id?: string
+          name: string
+          qualification: string
+          subject: string
+        }
+        Update: {
+          board?: string
+          created_at?: string
+          id?: string
+          name?: string
+          qualification?: string
+          subject?: string
+        }
+        Relationships: []
+      }
+      questions: {
+        Row: {
+          created_at: string
+          exam_id: string
+          id: string
+          image_url: string | null
+          max_marks: number
+          question_order: number
+          text: string
+        }
+        Insert: {
+          created_at?: string
+          exam_id: string
+          id?: string
+          image_url?: string | null
+          max_marks?: number
+          question_order?: number
+          text: string
+        }
+        Update: {
+          created_at?: string
+          exam_id?: string
+          id?: string
+          image_url?: string | null
+          max_marks?: number
+          question_order?: number
+          text?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "questions_exam_id_fkey"
+            columns: ["exam_id"]
+            isOneToOne: false
+            referencedRelation: "exams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      student_answers: {
+        Row: {
+          evaluated_result: Json | null
+          id: string
+          image_answer_url: string | null
+          question_id: string
+          student_name: string
+          submitted_at: string
+          text_answer: string | null
+        }
+        Insert: {
+          evaluated_result?: Json | null
+          id?: string
+          image_answer_url?: string | null
+          question_id: string
+          student_name: string
+          submitted_at?: string
+          text_answer?: string | null
+        }
+        Update: {
+          evaluated_result?: Json | null
+          id?: string
+          image_answer_url?: string | null
+          question_id?: string
+          student_name?: string
+          submitted_at?: string
+          text_answer?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "student_answers_question_id_fkey"
+            columns: ["question_id"]
+            isOneToOne: false
+            referencedRelation: "questions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
