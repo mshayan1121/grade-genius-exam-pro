@@ -1,9 +1,8 @@
-
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, Eye } from "lucide-react";
+import { ArrowLeft, Eye, Brain } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 
@@ -68,6 +67,33 @@ const ViewResults = ({ onBack }: ViewResultsProps) => {
       setSubmissions(data || []);
     }
     setIsLoading(false);
+  };
+
+  const evaluateAnswer = async (answerId: string) => {
+    setIsLoading(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('evaluate-answer', {
+        body: { answerId }
+      });
+
+      if (error) throw error;
+
+      toast({
+        title: "Evaluation completed!",
+        description: "The answer has been evaluated by AI.",
+      });
+
+      // Reload submissions to show updated results
+      loadSubmissions();
+    } catch (error: any) {
+      toast({
+        title: "Evaluation failed",
+        description: error.message,
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const getScoreColor = (score: number, maxScore: number) => {
@@ -214,11 +240,13 @@ const ViewResults = ({ onBack }: ViewResultsProps) => {
           <h1 className="text-3xl font-bold text-gray-900">Exam Results</h1>
         </div>
 
-        {isLoading ? (
+        {isLoading && (
           <div className="text-center py-8">
-            <p>Loading submissions...</p>
+            <p>Processing evaluation...</p>
           </div>
-        ) : submissions.length === 0 ? (
+        )}
+
+        {!isLoading && submissions.length === 0 ? (
           <Card>
             <CardContent className="text-center py-8">
               <p className="text-gray-500">No submissions found.</p>
@@ -247,6 +275,18 @@ const ViewResults = ({ onBack }: ViewResultsProps) => {
                         </Badge>
                       ) : (
                         <Badge variant="secondary">Not Evaluated</Badge>
+                      )}
+                      
+                      {!submission.evaluated_result && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => evaluateAnswer(submission.id)}
+                          disabled={isLoading}
+                        >
+                          <Brain className="w-4 h-4 mr-2" />
+                          Evaluate
+                        </Button>
                       )}
                       
                       <Button
