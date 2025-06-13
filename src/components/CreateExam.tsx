@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Plus, Trash2, ArrowLeft } from "lucide-react";
+import { Plus, Trash2, ArrowLeft, Eye } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 
@@ -34,6 +34,8 @@ const CreateExam = ({ onBack }: CreateExamProps) => {
   ]);
   const [exams, setExams] = useState<Exam[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [viewingExam, setViewingExam] = useState<string | null>(null);
+  const [examQuestions, setExamQuestions] = useState<any[]>([]);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -54,6 +56,25 @@ const CreateExam = ({ onBack }: CreateExamProps) => {
       });
     } else {
       setExams(data || []);
+    }
+  };
+
+  const viewExam = async (examId: string, examName: string) => {
+    const { data, error } = await supabase
+      .from('questions')
+      .select('*')
+      .eq('exam_id', examId)
+      .order('question_order');
+
+    if (error) {
+      toast({
+        title: "Error loading exam questions",
+        description: error.message,
+        variant: "destructive",
+      });
+    } else {
+      setExamQuestions(data || []);
+      setViewingExam(examName);
     }
   };
 
@@ -175,6 +196,50 @@ const CreateExam = ({ onBack }: CreateExamProps) => {
     }
   };
 
+  // If viewing an exam, show the exam details
+  if (viewingExam) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center gap-4">
+          <Button variant="outline" onClick={() => setViewingExam(null)}>
+            <ArrowLeft className="w-4 h-4 mr-2" />
+            Back to Exams
+          </Button>
+          <h2 className="text-2xl font-bold">{viewingExam}</h2>
+        </div>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Exam Questions</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            {examQuestions.length === 0 ? (
+              <p className="text-gray-500">No questions found for this exam.</p>
+            ) : (
+              examQuestions.map((question, index) => (
+                <Card key={question.id}>
+                  <CardHeader>
+                    <CardTitle>Question {index + 1} (Max Marks: {question.max_marks})</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="mb-4">{question.text}</p>
+                    {question.image_url && (
+                      <img 
+                        src={question.image_url} 
+                        alt={`Question ${index + 1} image`}
+                        className="max-w-md h-auto rounded border"
+                      />
+                    )}
+                  </CardContent>
+                </Card>
+              ))
+            )}
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       {onBack && (
@@ -209,13 +274,22 @@ const CreateExam = ({ onBack }: CreateExamProps) => {
                       {new Date(exam.created_at).toLocaleDateString()}
                     </TableCell>
                     <TableCell>
-                      <Button
-                        variant="destructive"
-                        size="sm"
-                        onClick={() => deleteExam(exam.id)}
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
+                      <div className="flex gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => viewExam(exam.id, exam.name)}
+                        >
+                          <Eye className="w-4 h-4" />
+                        </Button>
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          onClick={() => deleteExam(exam.id)}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}
