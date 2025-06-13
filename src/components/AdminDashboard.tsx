@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -10,6 +9,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { User } from '@supabase/supabase-js';
 import { ArrowLeft, Plus, Trash2, Building, Users } from "lucide-react";
+import { useUserRole } from "@/hooks/useUserRole";
+import CreateSchoolUser from "./CreateSchoolUser";
 import type { Database } from "@/integrations/supabase/types";
 
 type AppRole = Database['public']['Enums']['app_role'];
@@ -45,6 +46,9 @@ const AdminDashboard = ({ onBack, currentUser }: AdminDashboardProps) => {
   const [selectedSchool, setSelectedSchool] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const { toast } = useToast();
+  const { isSuperAdmin, isSchoolAdmin, userRoles: currentUserRoles } = useUserRole(currentUser);
+
+  const currentUserSchoolId = currentUserRoles.find(role => role.role === 'school_admin')?.school_id;
 
   useEffect(() => {
     fetchUserRoles();
@@ -211,159 +215,185 @@ const AdminDashboard = ({ onBack, currentUser }: AdminDashboardProps) => {
             Back to Main
           </Button>
           <div>
-            <h1 className="text-4xl font-bold text-gray-900">Admin Dashboard</h1>
-            <p className="text-gray-600">Manage users, roles, and schools</p>
+            <h1 className="text-4xl font-bold text-gray-900">
+              {isSuperAdmin() ? 'Super Admin Dashboard' : 'School Admin Dashboard'}
+            </h1>
+            <p className="text-gray-600">
+              {isSuperAdmin() ? 'Manage schools, users, and system settings' : 'Manage your school users and settings'}
+            </p>
           </div>
         </div>
 
         <div className="grid md:grid-cols-2 gap-6 mb-8">
-          {/* Create School */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Building className="w-5 h-5" />
-                Create School
-              </CardTitle>
-              <CardDescription>Add a new school to the system</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div>
-                <Label htmlFor="school-name">School Name *</Label>
-                <Input
-                  id="school-name"
-                  value={newSchool.name}
-                  onChange={(e) => setNewSchool({ ...newSchool, name: e.target.value })}
-                  placeholder="Enter school name"
-                />
-              </div>
-              <div>
-                <Label htmlFor="school-address">Address</Label>
-                <Input
-                  id="school-address"
-                  value={newSchool.address}
-                  onChange={(e) => setNewSchool({ ...newSchool, address: e.target.value })}
-                  placeholder="Enter school address"
-                />
-              </div>
-              <div>
-                <Label htmlFor="school-email">Contact Email</Label>
-                <Input
-                  id="school-email"
-                  type="email"
-                  value={newSchool.contact_email}
-                  onChange={(e) => setNewSchool({ ...newSchool, contact_email: e.target.value })}
-                  placeholder="Enter contact email"
-                />
-              </div>
-              <div>
-                <Label htmlFor="school-phone">Contact Phone</Label>
-                <Input
-                  id="school-phone"
-                  value={newSchool.contact_phone}
-                  onChange={(e) => setNewSchool({ ...newSchool, contact_phone: e.target.value })}
-                  placeholder="Enter contact phone"
-                />
-              </div>
-              <Button onClick={createSchool} className="w-full">
-                <Plus className="w-4 h-4 mr-2" />
-                Create School
-              </Button>
-            </CardContent>
-          </Card>
-
-          {/* Assign Role */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Users className="w-5 h-5" />
-                Assign User Role
-              </CardTitle>
-              <CardDescription>Assign roles to users in the system</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div>
-                <Label htmlFor="user-email">User Email/ID</Label>
-                <Input
-                  id="user-email"
-                  value={selectedUser}
-                  onChange={(e) => setSelectedUser(e.target.value)}
-                  placeholder="Enter user email or ID"
-                />
-              </div>
-              <div>
-                <Label htmlFor="role-select">Role</Label>
-                <Select value={selectedRole} onValueChange={(value: AppRole) => setSelectedRole(value)}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select a role" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="super_admin">Super Admin</SelectItem>
-                    <SelectItem value="school_admin">School Admin</SelectItem>
-                    <SelectItem value="school_teacher">School Teacher</SelectItem>
-                    <SelectItem value="school_student">School Student</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              {(selectedRole === 'school_admin' || selectedRole === 'school_teacher' || selectedRole === 'school_student') && (
+          {/* Create School - Only for Super Admins */}
+          {isSuperAdmin() && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Building className="w-5 h-5" />
+                  Create School
+                </CardTitle>
+                <CardDescription>Add a new school to the system</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
                 <div>
-                  <Label htmlFor="school-select">School</Label>
-                  <Select value={selectedSchool} onValueChange={setSelectedSchool}>
+                  <Label htmlFor="school-name">School Name *</Label>
+                  <Input
+                    id="school-name"
+                    value={newSchool.name}
+                    onChange={(e) => setNewSchool({ ...newSchool, name: e.target.value })}
+                    placeholder="Enter school name"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="school-address">Address</Label>
+                  <Input
+                    id="school-address"
+                    value={newSchool.address}
+                    onChange={(e) => setNewSchool({ ...newSchool, address: e.target.value })}
+                    placeholder="Enter school address"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="school-email">Contact Email</Label>
+                  <Input
+                    id="school-email"
+                    type="email"
+                    value={newSchool.contact_email}
+                    onChange={(e) => setNewSchool({ ...newSchool, contact_email: e.target.value })}
+                    placeholder="Enter contact email"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="school-phone">Contact Phone</Label>
+                  <Input
+                    id="school-phone"
+                    value={newSchool.contact_phone}
+                    onChange={(e) => setNewSchool({ ...newSchool, contact_phone: e.target.value })}
+                    placeholder="Enter contact phone"
+                  />
+                </div>
+                <Button onClick={createSchool} className="w-full">
+                  <Plus className="w-4 h-4 mr-2" />
+                  Create School
+                </Button>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Create User */}
+          <CreateSchoolUser
+            schools={schools}
+            userRole={isSuperAdmin() ? 'super_admin' : 'school_admin'}
+            currentUserSchoolId={currentUserSchoolId}
+            onUserCreated={() => {
+              fetchUserRoles();
+              toast({
+                title: "User created",
+                description: "New user has been created successfully",
+              });
+            }}
+          />
+
+          {/* Manual Role Assignment - Only for Super Admins */}
+          {isSuperAdmin() && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Users className="w-5 h-5" />
+                  Assign User Role (Manual)
+                </CardTitle>
+                <CardDescription>Manually assign roles to existing users</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div>
+                  <Label htmlFor="user-email">User Email/ID</Label>
+                  <Input
+                    id="user-email"
+                    value={selectedUser}
+                    onChange={(e) => setSelectedUser(e.target.value)}
+                    placeholder="Enter user email or ID"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="role-select">Role</Label>
+                  <Select value={selectedRole} onValueChange={(value: AppRole) => setSelectedRole(value)}>
                     <SelectTrigger>
-                      <SelectValue placeholder="Select a school" />
+                      <SelectValue placeholder="Select a role" />
                     </SelectTrigger>
                     <SelectContent>
-                      {schools.map((school) => (
-                        <SelectItem key={school.id} value={school.id}>
-                          {school.name}
-                        </SelectItem>
-                      ))}
+                      <SelectItem value="super_admin">Super Admin</SelectItem>
+                      <SelectItem value="school_admin">School Admin</SelectItem>
+                      <SelectItem value="school_teacher">School Teacher</SelectItem>
+                      <SelectItem value="school_student">School Student</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
-              )}
-              <Button onClick={assignRole} className="w-full">
-                <Plus className="w-4 h-4 mr-2" />
-                Assign Role
-              </Button>
-            </CardContent>
-          </Card>
+                {(selectedRole === 'school_admin' || selectedRole === 'school_teacher' || selectedRole === 'school_student') && (
+                  <div>
+                    <Label htmlFor="school-select">School</Label>
+                    <Select value={selectedSchool} onValueChange={setSelectedSchool}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select a school" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {schools.map((school) => (
+                          <SelectItem key={school.id} value={school.id}>
+                            {school.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+                <Button onClick={assignRole} className="w-full">
+                  <Plus className="w-4 h-4 mr-2" />
+                  Assign Role
+                </Button>
+              </CardContent>
+            </Card>
+          )}
         </div>
 
-        {/* Schools List */}
-        <Card className="mb-8">
-          <CardHeader>
-            <CardTitle>Schools</CardTitle>
-            <CardDescription>List of all schools in the system</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Address</TableHead>
-                  <TableHead>Contact Email</TableHead>
-                  <TableHead>Contact Phone</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {schools.map((school) => (
-                  <TableRow key={school.id}>
-                    <TableCell className="font-medium">{school.name}</TableCell>
-                    <TableCell>{school.address || 'N/A'}</TableCell>
-                    <TableCell>{school.contact_email || 'N/A'}</TableCell>
-                    <TableCell>{school.contact_phone || 'N/A'}</TableCell>
+        {/* Schools List - Only for Super Admins */}
+        {isSuperAdmin() && (
+          <Card className="mb-8">
+            <CardHeader>
+              <CardTitle>Schools</CardTitle>
+              <CardDescription>List of all schools in the system</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Name</TableHead>
+                    <TableHead>Address</TableHead>
+                    <TableHead>Contact Email</TableHead>
+                    <TableHead>Contact Phone</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
+                </TableHeader>
+                <TableBody>
+                  {schools.map((school) => (
+                    <TableRow key={school.id}>
+                      <TableCell className="font-medium">{school.name}</TableCell>
+                      <TableCell>{school.address || 'N/A'}</TableCell>
+                      <TableCell>{school.contact_email || 'N/A'}</TableCell>
+                      <TableCell>{school.contact_phone || 'N/A'}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+        )}
 
         {/* User Roles List */}
         <Card>
           <CardHeader>
             <CardTitle>User Roles</CardTitle>
-            <CardDescription>Manage user roles and permissions</CardDescription>
+            <CardDescription>
+              {isSuperAdmin() ? 'Manage all user roles and permissions' : 'Manage users in your school'}
+            </CardDescription>
           </CardHeader>
           <CardContent>
             <Table>
@@ -376,7 +406,11 @@ const AdminDashboard = ({ onBack, currentUser }: AdminDashboardProps) => {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {userRoles.map((userRole) => (
+                {userRoles
+                  .filter(userRole => 
+                    isSuperAdmin() || userRole.school_id === currentUserSchoolId
+                  )
+                  .map((userRole) => (
                   <TableRow key={userRole.id}>
                     <TableCell className="font-mono text-sm">{userRole.user_id}</TableCell>
                     <TableCell>

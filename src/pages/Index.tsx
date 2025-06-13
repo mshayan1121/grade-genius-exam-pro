@@ -6,7 +6,7 @@ import CreateExam from "@/components/CreateExam";
 import TakeExam from "@/components/TakeExam";
 import ViewResults from "@/components/ViewResults";
 import AdminDashboard from "@/components/AdminDashboard";
-import Auth from "@/components/Auth";
+import AuthSelector from "@/components/AuthSelector";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useUserRole } from "@/hooks/useUserRole";
@@ -20,7 +20,7 @@ const Index = () => {
   const [session, setSession] = useState<Session | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const { toast } = useToast();
-  const { isSuperAdmin, isLoading: roleLoading } = useUserRole(user);
+  const { isSuperAdmin, isSchoolAdmin, isLoading: roleLoading } = useUserRole(user);
 
   useEffect(() => {
     // Set up auth state listener first
@@ -74,7 +74,7 @@ const Index = () => {
   }
 
   if (!user) {
-    return <Auth onAuthSuccess={handleAuthSuccess} />;
+    return <AuthSelector onAuthSuccess={handleAuthSuccess} />;
   }
 
   if (currentPage === 'create') {
@@ -102,12 +102,13 @@ const Index = () => {
               Exam Management System
             </h1>
             <p className="text-gray-600">
-              Welcome, {user.email}! Create, take, and manage exams with ease.
+              Welcome, {user.email}! 
               {isSuperAdmin() && <span className="ml-2 px-2 py-1 bg-purple-100 text-purple-800 rounded-md text-sm font-medium">Super Admin</span>}
+              {isSchoolAdmin() && <span className="ml-2 px-2 py-1 bg-blue-100 text-blue-800 rounded-md text-sm font-medium">School Admin</span>}
             </p>
           </div>
           <div className="flex gap-2">
-            {isSuperAdmin() && (
+            {(isSuperAdmin() || isSchoolAdmin()) && (
               <Button variant="outline" onClick={() => setCurrentPage('admin')}>
                 <Settings className="w-4 h-4 mr-2" />
                 Admin

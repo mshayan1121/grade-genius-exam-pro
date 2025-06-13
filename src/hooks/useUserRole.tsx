@@ -2,10 +2,13 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { User } from '@supabase/supabase-js';
+import type { Database } from "@/integrations/supabase/types";
+
+type AppRole = Database['public']['Enums']['app_role'];
 
 interface UserRole {
   id: string;
-  role: string;
+  role: AppRole;
   school_id: string | null;
 }
 
@@ -41,7 +44,7 @@ export const useUserRole = (user: User | null) => {
     }
   };
 
-  const hasRole = (role: string, schoolId?: string) => {
+  const hasRole = (role: AppRole, schoolId?: string) => {
     return userRoles.some(userRole => {
       if (schoolId && userRole.school_id !== schoolId) {
         return false;
