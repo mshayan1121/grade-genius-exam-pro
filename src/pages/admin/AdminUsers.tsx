@@ -23,6 +23,11 @@ interface UserRole {
   created_at: string;
 }
 
+interface UserWithEmail {
+  id: string;
+  email: string;
+}
+
 interface School {
   id: string;
   name: string;
@@ -30,6 +35,7 @@ interface School {
 
 export default function AdminUsers() {
   const [userRoles, setUserRoles] = useState<UserRole[]>([]);
+  const [users, setUsers] = useState<UserWithEmail[]>([]);
   const [schools, setSchools] = useState<School[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const { toast } = useToast();
@@ -45,6 +51,7 @@ export default function AdminUsers() {
     });
 
     fetchUserRoles();
+    fetchUsers();
     fetchSchools();
   }, []);
 
@@ -66,6 +73,33 @@ export default function AdminUsers() {
       console.error('Error in fetchUserRoles:', error);
       toast({
         title: "Error fetching user roles",
+        description: error.message,
+        variant: "destructive",
+      });
+    }
+  };
+
+  const fetchUsers = async () => {
+    try {
+      console.log('Fetching users...');
+      const { data, error } = await supabase.auth.admin.listUsers();
+      
+      if (error) {
+        console.error('Error fetching users:', error);
+        throw error;
+      }
+      console.log('Users fetched:', data);
+      
+      const usersWithEmail = data.users.map(user => ({
+        id: user.id,
+        email: user.email || 'No email'
+      }));
+      
+      setUsers(usersWithEmail);
+    } catch (error: any) {
+      console.error('Error in fetchUsers:', error);
+      toast({
+        title: "Error fetching users",
         description: error.message,
         variant: "destructive",
       });
@@ -126,6 +160,16 @@ export default function AdminUsers() {
     }
   };
 
+  const getUserEmail = (userId: string) => {
+    const user = users.find(u => u.id === userId);
+    return user?.email || 'Loading...';
+  };
+
+  const handleUserCreated = () => {
+    fetchUserRoles();
+    fetchUsers();
+  };
+
   if (isLoading) {
     return <div className="text-center">Loading users...</div>;
   }
@@ -154,29 +198,32 @@ export default function AdminUsers() {
         schools={schools}
         userRole={userRole}
         currentUserSchoolId={currentUserSchoolId}
-        onUserCreated={fetchUserRoles}
+        onUserCreated={handleUserCreated}
       />
 
       <Card>
         <CardHeader>
           <CardTitle>User Roles</CardTitle>
-          <CardDescription>All user roles in the system</CardDescription>
+          <CardDescription>
+            All user roles in the system. Default password for new users: <strong>123456</strong>
+          </CardDescription>
         </CardHeader>
         <CardContent>
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>User ID</TableHead>
+                <TableHead>Email</TableHead>
                 <TableHead>Role</TableHead>
                 <TableHead>School</TableHead>
                 <TableHead>Created</TableHead>
+                <TableHead>Password</TableHead>
                 <TableHead>Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {userRoles.map((userRole) => (
                 <TableRow key={userRole.id}>
-                  <TableCell className="font-mono text-sm">{userRole.user_id}</TableCell>
+                  <TableCell className="font-mono text-sm">{getUserEmail(userRole.user_id)}</TableCell>
                   <TableCell>
                     <span className="capitalize">{userRole.role.replace('_', ' ')}</span>
                   </TableCell>
@@ -186,6 +233,9 @@ export default function AdminUsers() {
                       : 'N/A'}
                   </TableCell>
                   <TableCell>{new Date(userRole.created_at).toLocaleDateString()}</TableCell>
+                  <TableCell>
+                    <span className="text-sm text-gray-600">123456 (default)</span>
+                  </TableCell>
                   <TableCell>
                     <Button
                       variant="destructive"
