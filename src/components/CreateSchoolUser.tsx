@@ -52,18 +52,32 @@ const CreateSchoolUser = ({ schools, userRole, currentUserSchoolId, onUserCreate
     setIsLoading(true);
 
     try {
-      // Create user account
+      console.log('Creating user with email:', email, 'role:', selectedRole, 'school:', selectedSchool);
+      
+      // Generate a temporary password
       const tempPassword = Math.random().toString(36).slice(-8) + "Aa1!";
       
-      const { data: authData, error: authError } = await supabase.auth.admin.createUser({
+      // Sign up the user using the regular signup flow
+      const { data: authData, error: authError } = await supabase.auth.signUp({
         email,
         password: tempPassword,
-        email_confirm: true
+        options: {
+          emailRedirectTo: `${window.location.origin}/`
+        }
       });
 
-      if (authError) throw authError;
+      if (authError) {
+        console.error('Auth error:', authError);
+        throw authError;
+      }
 
-      // Assign role
+      if (!authData.user) {
+        throw new Error('User creation failed - no user data returned');
+      }
+
+      console.log('User created successfully:', authData.user.id);
+
+      // Now create the user role
       const { error: roleError } = await supabase
         .from('user_roles')
         .insert({
@@ -72,7 +86,12 @@ const CreateSchoolUser = ({ schools, userRole, currentUserSchoolId, onUserCreate
           school_id: selectedSchool
         });
 
-      if (roleError) throw roleError;
+      if (roleError) {
+        console.error('Role assignment error:', roleError);
+        throw roleError;
+      }
+
+      console.log('Role assigned successfully');
 
       toast({
         title: "User created successfully",
@@ -84,6 +103,7 @@ const CreateSchoolUser = ({ schools, userRole, currentUserSchoolId, onUserCreate
       setSelectedSchool(currentUserSchoolId || "");
       onUserCreated();
     } catch (error: any) {
+      console.error('Error creating user:', error);
       toast({
         title: "Error creating user",
         description: error.message,

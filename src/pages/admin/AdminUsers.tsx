@@ -9,6 +9,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { Plus, Trash2 } from "lucide-react";
+import CreateSchoolUser from "@/components/CreateSchoolUser";
+import { useUserRole } from "@/hooks/useUserRole";
 import type { Database } from "@/integrations/supabase/types";
 
 type AppRole = Database['public']['Enums']['app_role'];
@@ -29,30 +31,39 @@ interface School {
 export default function AdminUsers() {
   const [userRoles, setUserRoles] = useState<UserRole[]>([]);
   const [schools, setSchools] = useState<School[]>([]);
-  const [newUser, setNewUser] = useState({
-    email: "",
-    password: "",
-    role: "" as AppRole | "",
-    school_id: ""
-  });
   const [isLoading, setIsLoading] = useState(true);
   const { toast } = useToast();
 
+  // Get current user's auth state
+  const [currentUser, setCurrentUser] = useState<any>(null);
+  const { isSuperAdmin, isSchoolAdmin, userRoles: currentUserRoles } = useUserRole(currentUser);
+
   useEffect(() => {
+    // Get current user
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      setCurrentUser(user);
+    });
+
     fetchUserRoles();
     fetchSchools();
   }, []);
 
   const fetchUserRoles = async () => {
     try {
+      console.log('Fetching user roles...');
       const { data, error } = await supabase
         .from('user_roles')
         .select('*')
         .order('created_at', { ascending: false });
       
-      if (error) throw error;
+      if (error) {
+        console.error('Error fetching user roles:', error);
+        throw error;
+      }
+      console.log('User roles fetched:', data);
       setUserRoles(data || []);
     } catch (error: any) {
+      console.error('Error in fetchUserRoles:', error);
       toast({
         title: "Error fetching user roles",
         description: error.message,
@@ -63,13 +74,19 @@ export default function AdminUsers() {
 
   const fetchSchools = async () => {
     try {
+      console.log('Fetching schools...');
       const { data, error } = await supabase
         .from('schools')
         .select('id, name');
       
-      if (error) throw error;
+      if (error) {
+        console.error('Error fetching schools:', error);
+        throw error;
+      }
+      console.log('Schools fetched:', data);
       setSchools(data || []);
     } catch (error: any) {
+      console.error('Error in fetchSchools:', error);
       toast({
         title: "Error fetching schools",
         description: error.message,
@@ -80,72 +97,18 @@ export default function AdminUsers() {
     }
   };
 
-  const createUser = async () => {
-    if (!newUser.email || !newUser.password || !newUser.role) {
-      toast({
-        title: "Missing information",
-        description: "Please fill in all required fields",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    if ((newUser.role === 'school_admin' || newUser.role === 'school_teacher' || newUser.role === 'school_student') && !newUser.school_id) {
-      toast({
-        title: "School required",
-        description: "Please select a school for this role",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    try {
-      // Create user account
-      const { data: authData, error: authError } = await supabase.auth.admin.createUser({
-        email: newUser.email,
-        password: newUser.password,
-        email_confirm: true
-      });
-
-      if (authError) throw authError;
-
-      if (authData.user) {
-        // Create user role
-        const { error: roleError } = await supabase
-          .from('user_roles')
-          .insert({
-            user_id: authData.user.id,
-            role: newUser.role as AppRole,
-            school_id: newUser.role === 'super_admin' ? null : (newUser.school_id || null)
-          });
-
-        if (roleError) throw roleError;
-
-        toast({
-          title: "User created",
-          description: "User has been created successfully",
-        });
-
-        setNewUser({ email: "", password: "", role: "", school_id: "" });
-        fetchUserRoles();
-      }
-    } catch (error: any) {
-      toast({
-        title: "Error creating user",
-        description: error.message,
-        variant: "destructive",
-      });
-    }
-  };
-
   const removeRole = async (roleId: string) => {
     try {
+      console.log('Removing role:', roleId);
       const { error } = await supabase
         .from('user_roles')
         .delete()
         .eq('id', roleId);
 
-      if (error) throw error;
+      if (error) {
+        console.error('Error removing role:', error);
+        throw error;
+      }
 
       toast({
         title: "Role removed",
@@ -154,6 +117,7 @@ export default function AdminUsers() {
 
       fetchUserRoles();
     } catch (error: any) {
+      console.error('Error in removeRole:', error);
       toast({
         title: "Error removing role",
         description: error.message,
@@ -166,6 +130,19 @@ export default function AdminUsers() {
     return <div className="text-center">Loading users...</div>;
   }
 
+  // Determine user permissions
+  const userRole = isSuperAdmin() ? 'super_admin' : isSchoolAdmin() ? 'school_admin' : null;
+  const currentUserSchoolId = currentUserRoles.find(role => role.role === 'school_admin')?.school_id;
+
+  if (!userRole) {
+    return (
+      <div className="text-center p-8">
+        <h2 className="text-2xl font-bold text-red-600">Access Denied</h2>
+        <p className="text-gray-600 mt-2">You don't have permission to manage users.</p>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       <div>
@@ -173,71 +150,12 @@ export default function AdminUsers() {
         <p className="text-gray-600">Create and manage user accounts and roles</p>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Create New User</CardTitle>
-          <CardDescription>Add a new user to the system</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <Label htmlFor="user-email">Email *</Label>
-              <Input
-                id="user-email"
-                type="email"
-                value={newUser.email}
-                onChange={(e) => setNewUser({ ...newUser, email: e.target.value })}
-                placeholder="Enter user email"
-              />
-            </div>
-            <div>
-              <Label htmlFor="user-password">Password *</Label>
-              <Input
-                id="user-password"
-                type="password"
-                value={newUser.password}
-                onChange={(e) => setNewUser({ ...newUser, password: e.target.value })}
-                placeholder="Enter password"
-              />
-            </div>
-            <div>
-              <Label htmlFor="user-role">Role *</Label>
-              <Select value={newUser.role} onValueChange={(value: AppRole) => setNewUser({ ...newUser, role: value })}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select a role" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="super_admin">Super Admin</SelectItem>
-                  <SelectItem value="school_admin">School Admin</SelectItem>
-                  <SelectItem value="school_teacher">School Teacher</SelectItem>
-                  <SelectItem value="school_student">School Student</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            {(newUser.role === 'school_admin' || newUser.role === 'school_teacher' || newUser.role === 'school_student') && (
-              <div>
-                <Label htmlFor="user-school">School *</Label>
-                <Select value={newUser.school_id} onValueChange={(value) => setNewUser({ ...newUser, school_id: value })}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select a school" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {schools.map((school) => (
-                      <SelectItem key={school.id} value={school.id}>
-                        {school.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
-          </div>
-          <Button onClick={createUser} className="w-full">
-            <Plus className="w-4 h-4 mr-2" />
-            Create User
-          </Button>
-        </CardContent>
-      </Card>
+      <CreateSchoolUser 
+        schools={schools}
+        userRole={userRole}
+        currentUserSchoolId={currentUserSchoolId}
+        onUserCreated={fetchUserRoles}
+      />
 
       <Card>
         <CardHeader>
