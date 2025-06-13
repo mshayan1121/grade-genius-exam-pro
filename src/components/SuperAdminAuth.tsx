@@ -144,9 +144,30 @@ const SuperAdminAuth = ({ onAuthSuccess, onSwitchToSchool }: SuperAdminAuthProps
           variant: "destructive",
         });
       } else if (data.user) {
-        console.log('User created, adding super admin role...', data.user.id);
+        console.log('User created successfully:', data.user.id);
         
-        // Create super admin role for this user
+        // Wait a moment for the auth context to be established
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        
+        // Sign in the user immediately to establish the session
+        const { error: signInError } = await supabase.auth.signInWithPassword({
+          email,
+          password,
+        });
+
+        if (signInError) {
+          console.error('Auto sign-in failed:', signInError);
+          toast({
+            title: "Account created",
+            description: "Please check your email to confirm your account, then sign in manually.",
+          });
+          setIsSignUp(false);
+          return;
+        }
+
+        console.log('Auto sign-in successful, adding super admin role...');
+        
+        // Now try to create the role with the established session
         const { error: roleError } = await supabase
           .from('user_roles')
           .insert({
@@ -164,10 +185,10 @@ const SuperAdminAuth = ({ onAuthSuccess, onSwitchToSchool }: SuperAdminAuthProps
         } else {
           console.log('Super admin role assigned successfully');
           toast({
-            title: "Account created!",
-            description: "Please check your email to confirm your account.",
+            title: "Account created successfully!",
+            description: "Your super admin account is ready to use.",
           });
-          setIsSignUp(false);
+          onAuthSuccess();
         }
       }
     } catch (error: any) {
