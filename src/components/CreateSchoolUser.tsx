@@ -39,31 +39,6 @@ const CreateSchoolUser = ({ schools, userRole, currentUserSchoolId, onUserCreate
     ? schools 
     : schools.filter(school => school.id === currentUserSchoolId);
 
-  // Helper function to wait for user to be created
-  const waitForUserCreation = async (userId: string, maxRetries = 5) => {
-    for (let i = 0; i < maxRetries; i++) {
-      try {
-        // Try to query the user roles table - this will fail if the user doesn't exist
-        const { error } = await supabase
-          .from('user_roles')
-          .select('id')
-          .eq('user_id', userId)
-          .limit(1);
-        
-        // If the query doesn't throw an error, the user exists
-        if (!error || !error.message.includes('violates foreign key constraint')) {
-          return true;
-        }
-      } catch (e) {
-        console.log(`Attempt ${i + 1}: User not ready yet, waiting...`);
-      }
-      
-      // Wait 1 second before next attempt
-      await new Promise(resolve => setTimeout(resolve, 1000));
-    }
-    return false;
-  };
-
   const handleCreateUser = async () => {
     if (!email || !selectedRole || !selectedSchool) {
       toast({
@@ -82,6 +57,71 @@ const CreateSchoolUser = ({ schools, userRole, currentUserSchoolId, onUserCreate
       // Use default password
       const defaultPassword = "123456";
       
+      // First, check if user already exists by trying to sign them in
+      const { data: existingUser, error: signInError } = await supabase.auth.signInWithPassword({
+        email,
+        password: defaultPassword,
+      });
+
+      if (!signInError && existingUser.user) {
+        // User exists and can sign in
+        console.log('User already exists:', existingUser.user.id);
+        
+        // Check if they already have this role
+        const { data: existingRoles } = await supabase
+          .from('user_roles')
+          .select('*')
+          .eq('user_id', existingUser.user.id)
+          .eq('role', selectedRole)
+          .eq('school_id', selectedSchool);
+        
+        if (existingRoles && existingRoles.length > 0) {
+          toast({
+            title: "Role already assigned",
+            description: "This user already has this role for this school.",
+            variant: "destructive",
+          });
+          // Sign out the user we just signed in for checking
+          await supabase.auth.signOut();
+          setIsLoading(false);
+          return;
+        }
+        
+        // Assign the new role
+        const { error: roleError } = await supabase
+          .from('user_roles')
+          .insert({
+            user_id: existingUser.user.id,
+            role: selectedRole as AppRole,
+            school_id: selectedSchool
+          });
+
+        // Sign out the user we just signed in for checking
+        await supabase.auth.signOut();
+
+        if (roleError) {
+          console.error('Role assignment error:', roleError);
+          throw roleError;
+        }
+
+        console.log('Role assigned to existing user successfully');
+
+        toast({
+          title: "Role assigned successfully",
+          description: `Role assigned to existing user ${email}. Password: ${defaultPassword}`,
+        });
+
+        setEmail("");
+        setSelectedRole("");
+        setSelectedSchool(currentUserSchoolId || "");
+        onUserCreated();
+        setIsLoading(false);
+        return;
+      }
+
+      // User doesn't exist or can't sign in with default password, create new user
+      console.log('Creating new user...');
+      
       // Sign up the user using the regular signup flow
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email,
@@ -96,87 +136,7 @@ const CreateSchoolUser = ({ schools, userRole, currentUserSchoolId, onUserCreate
 
       if (authError) {
         console.error('Auth error:', authError);
-        
-        if (authError.message.includes("User already registered")) {
-          // User exists, try to find them and assign role
-          console.log('User already exists, attempting to find and assign role...');
-          
-          // Try to sign in to get the user data
-          const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
-            email,
-            password: defaultPassword,
-          });
-          
-          if (signInError) {
-            console.error('Could not sign in existing user:', signInError);
-            toast({
-              title: "User exists but cannot access",
-              description: "User already exists but we cannot access their account. They may have a different password.",
-              variant: "destructive",
-            });
-            setIsLoading(false);
-            return;
-          }
-          
-          if (signInData.user) {
-            console.log('Found existing user:', signInData.user.id);
-            
-            // Check if they already have this role
-            const { data: existingRoles } = await supabase
-              .from('user_roles')
-              .select('*')
-              .eq('user_id', signInData.user.id)
-              .eq('role', selectedRole)
-              .eq('school_id', selectedSchool);
-            
-            if (existingRoles && existingRoles.length > 0) {
-              toast({
-                title: "Role already assigned",
-                description: "This user already has this role for this school.",
-                variant: "destructive",
-              });
-              // Sign out the user we just signed in for checking
-              await supabase.auth.signOut();
-              setIsLoading(false);
-              return;
-            }
-            
-            // Assign the new role
-            const { error: roleError } = await supabase
-              .from('user_roles')
-              .insert({
-                user_id: signInData.user.id,
-                role: selectedRole as AppRole,
-                school_id: selectedSchool
-              });
-
-            // Sign out the user we just signed in for checking
-            await supabase.auth.signOut();
-
-            if (roleError) {
-              console.error('Role assignment error:', roleError);
-              throw roleError;
-            }
-
-            console.log('Role assigned to existing user successfully');
-
-            toast({
-              title: "Role assigned successfully",
-              description: `Role assigned to existing user ${email}. Password: ${defaultPassword}`,
-            });
-
-            setEmail("");
-            setSelectedRole("");
-            setSelectedSchool(currentUserSchoolId || "");
-            onUserCreated();
-            setIsLoading(false);
-            return;
-          }
-        } else {
-          throw authError;
-        }
-        setIsLoading(false);
-        return;
+        throw authError;
       }
 
       if (!authData.user) {
@@ -185,15 +145,8 @@ const CreateSchoolUser = ({ schools, userRole, currentUserSchoolId, onUserCreate
 
       console.log('User created successfully:', authData.user.id);
 
-      // Wait for the user to be properly created in the database
-      console.log('Waiting for user to be properly created...');
-      const userExists = await waitForUserCreation(authData.user.id);
-      
-      if (!userExists) {
-        throw new Error('User creation timed out - please try again');
-      }
-
-      console.log('User confirmed to exist, creating role...');
+      // Wait a bit for the user to be properly created in the auth system
+      await new Promise(resolve => setTimeout(resolve, 2000));
 
       // Now create the user role
       const { error: roleError } = await supabase
@@ -206,7 +159,25 @@ const CreateSchoolUser = ({ schools, userRole, currentUserSchoolId, onUserCreate
 
       if (roleError) {
         console.error('Role assignment error:', roleError);
-        throw roleError;
+        // If foreign key constraint fails, wait a bit more and try again
+        if (roleError.message.includes('violates foreign key constraint')) {
+          console.log('Foreign key constraint error, retrying after delay...');
+          await new Promise(resolve => setTimeout(resolve, 3000));
+          
+          const { error: retryRoleError } = await supabase
+            .from('user_roles')
+            .insert({
+              user_id: authData.user.id,
+              role: selectedRole as AppRole,
+              school_id: selectedSchool
+            });
+          
+          if (retryRoleError) {
+            throw retryRoleError;
+          }
+        } else {
+          throw roleError;
+        }
       }
 
       console.log('Role assigned successfully');
