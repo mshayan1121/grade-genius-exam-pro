@@ -1,5 +1,5 @@
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -37,11 +37,7 @@ const ViewResults = ({ onBack }: ViewResultsProps) => {
   const [evaluatingIds, setEvaluatingIds] = useState<Set<string>>(new Set());
   const { toast } = useToast();
 
-  useEffect(() => {
-    loadSubmissions();
-  }, []);
-
-  const loadSubmissions = async () => {
+  const loadSubmissions = useCallback(async () => {
     const { data, error } = await supabase
       .from('student_answers')
       .select(`
@@ -69,7 +65,39 @@ const ViewResults = ({ onBack }: ViewResultsProps) => {
       setSubmissions(data || []);
     }
     setIsLoading(false);
-  };
+  }, [toast]);
+
+  useEffect(() => {
+    loadSubmissions();
+
+    // Set up real-time subscription for student_answers updates
+    const channel = supabase
+      .channel('student-answers-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'student_answers'
+        },
+        (payload) => {
+          console.log('Student answer updated:', payload);
+          // Reload submissions when any answer is updated
+          loadSubmissions();
+        }
+      )
+      .subscribe();
+
+    // Also poll every 10 seconds to catch any missed updates
+    const pollInterval = setInterval(() => {
+      loadSubmissions();
+    }, 10000);
+
+    return () => {
+      supabase.removeChannel(channel);
+      clearInterval(pollInterval);
+    };
+  }, [loadSubmissions]);
 
   const evaluateAnswer = async (answerId: string) => {
     setEvaluatingIds(prev => new Set([...prev, answerId]));
