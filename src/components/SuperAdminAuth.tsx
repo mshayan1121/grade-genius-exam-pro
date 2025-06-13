@@ -17,6 +17,7 @@ const SuperAdminAuth = ({ onAuthSuccess, onSwitchToSchool }: SuperAdminAuthProps
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [secretKey, setSecretKey] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [isSignUp, setIsSignUp] = useState(false);
@@ -77,6 +78,17 @@ const SuperAdminAuth = ({ onAuthSuccess, onSwitchToSchool }: SuperAdminAuthProps
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
+
+    // Validate secret key first
+    if (secretKey !== "exaim") {
+      toast({
+        title: "Invalid secret key",
+        description: "You need the correct secret key to create a super admin account.",
+        variant: "destructive",
+      });
+      setIsLoading(false);
+      return;
+    }
 
     if (password !== confirmPassword) {
       toast({
@@ -182,16 +194,32 @@ const SuperAdminAuth = ({ onAuthSuccess, onSwitchToSchool }: SuperAdminAuthProps
               </div>
             </div>
             {isSignUp && (
-              <div>
-                <Label htmlFor="confirmPassword">Confirm Password</Label>
-                <Input
-                  id="confirmPassword"
-                  type="password"
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  required
-                />
-              </div>
+              <>
+                <div>
+                  <Label htmlFor="confirmPassword">Confirm Password</Label>
+                  <Input
+                    id="confirmPassword"
+                    type="password"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    required
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="secretKey">Super Admin Secret Key</Label>
+                  <Input
+                    id="secretKey"
+                    type="password"
+                    value={secretKey}
+                    onChange={(e) => setSecretKey(e.target.value)}
+                    required
+                    placeholder="Enter secret key to create super admin account"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    You need the secret key to create a super admin account
+                  </p>
+                </div>
+              </>
             )}
             <Button type="submit" className="w-full" disabled={isLoading}>
               {isLoading 
