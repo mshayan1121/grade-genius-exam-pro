@@ -1,17 +1,18 @@
-
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { BookOpen, FileText, BarChart3, LogOut } from "lucide-react";
+import { BookOpen, FileText, BarChart3, LogOut, Settings } from "lucide-react";
 import CreateExam from "@/components/CreateExam";
 import TakeExam from "@/components/TakeExam";
 import ViewResults from "@/components/ViewResults";
+import AdminDashboard from "@/components/AdminDashboard";
 import Auth from "@/components/Auth";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { useUserRole } from "@/hooks/useUserRole";
 import { User, Session } from '@supabase/supabase-js';
 
-type Page = 'home' | 'create' | 'take' | 'results';
+type Page = 'home' | 'create' | 'take' | 'results' | 'admin';
 
 const Index = () => {
   const [currentPage, setCurrentPage] = useState<Page>('home');
@@ -19,6 +20,7 @@ const Index = () => {
   const [session, setSession] = useState<Session | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const { toast } = useToast();
+  const { isSuperAdmin, isLoading: roleLoading } = useUserRole(user);
 
   useEffect(() => {
     // Set up auth state listener first
@@ -63,7 +65,7 @@ const Index = () => {
     setCurrentPage('home');
   };
 
-  if (isLoading) {
+  if (isLoading || roleLoading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center">
         <div className="text-xl">Loading...</div>
@@ -87,6 +89,10 @@ const Index = () => {
     return <ViewResults onBack={() => setCurrentPage('home')} />;
   }
 
+  if (currentPage === 'admin') {
+    return <AdminDashboard onBack={() => setCurrentPage('home')} currentUser={user} />;
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
       <div className="container mx-auto px-4 py-8">
@@ -97,12 +103,21 @@ const Index = () => {
             </h1>
             <p className="text-gray-600">
               Welcome, {user.email}! Create, take, and manage exams with ease.
+              {isSuperAdmin() && <span className="ml-2 px-2 py-1 bg-purple-100 text-purple-800 rounded-md text-sm font-medium">Super Admin</span>}
             </p>
           </div>
-          <Button variant="outline" onClick={handleSignOut}>
-            <LogOut className="w-4 h-4 mr-2" />
-            Sign Out
-          </Button>
+          <div className="flex gap-2">
+            {isSuperAdmin() && (
+              <Button variant="outline" onClick={() => setCurrentPage('admin')}>
+                <Settings className="w-4 h-4 mr-2" />
+                Admin
+              </Button>
+            )}
+            <Button variant="outline" onClick={handleSignOut}>
+              <LogOut className="w-4 h-4 mr-2" />
+              Sign Out
+            </Button>
+          </div>
         </div>
 
         <div className="grid md:grid-cols-3 gap-6 max-w-4xl mx-auto">
