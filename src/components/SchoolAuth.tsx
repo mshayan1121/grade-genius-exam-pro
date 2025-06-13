@@ -83,34 +83,47 @@ const SchoolAuth = ({ onAuthSuccess, onSwitchToSuperAdmin }: SchoolAuthProps) =>
     setIsLoading(true);
 
     try {
-      console.log('Attempting school portal sign in...');
+      console.log('Attempting school portal sign in with:', email);
       
-      const { error } = await supabase.auth.signInWithPassword({
+      const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password,
       });
 
       if (error) {
         console.error('Sign in error:', error);
+        if (error.message === "Invalid login credentials") {
+          toast({
+            title: "Invalid credentials",
+            description: "Please check your email and password. For new users created by admin, the default password is 123456.",
+            variant: "destructive",
+          });
+        } else {
+          toast({
+            title: "Login failed",
+            description: error.message,
+            variant: "destructive",
+          });
+        }
+        return;
+      }
+
+      if (!data.user) {
         toast({
           title: "Login failed",
-          description: error.message,
+          description: "No user data received",
           variant: "destructive",
         });
         return;
       }
 
-      console.log('Sign in successful, checking roles...');
-      
-      // Get the current user
-      const { data: { user } } = await supabase.auth.getUser();
-      console.log('Current user:', user?.id);
+      console.log('Sign in successful, checking roles for user:', data.user.id);
       
       // Check user roles
       const { data: userRoles, error: roleError } = await supabase
         .from('user_roles')
         .select('role')
-        .eq('user_id', user?.id);
+        .eq('user_id', data.user.id);
 
       console.log('User roles query result:', { userRoles, roleError });
 
@@ -181,6 +194,7 @@ const SchoolAuth = ({ onAuthSuccess, onSwitchToSuperAdmin }: SchoolAuthProps) =>
           </div>
           <CardTitle className="text-2xl">School Portal</CardTitle>
           <p className="text-sm text-gray-600">For school admins, teachers & students</p>
+          <p className="text-xs text-blue-600 mt-1">Default password for new users: 123456</p>
         </CardHeader>
         <CardContent>
           <Tabs defaultValue="signin" className="w-full">
