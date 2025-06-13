@@ -83,25 +83,85 @@ const SchoolAuth = ({ onAuthSuccess, onSwitchToSuperAdmin }: SchoolAuthProps) =>
     setIsLoading(true);
 
     try {
+      console.log('Attempting school portal sign in...');
+      
       const { error } = await supabase.auth.signInWithPassword({
         email,
         password,
       });
 
       if (error) {
+        console.error('Sign in error:', error);
         toast({
           title: "Login failed",
           description: error.message,
           variant: "destructive",
         });
-      } else {
-        toast({
-          title: "Welcome!",
-          description: "You have been logged in successfully.",
-        });
-        onAuthSuccess();
+        return;
       }
+
+      console.log('Sign in successful, checking roles...');
+      
+      // Get the current user
+      const { data: { user } } = await supabase.auth.getUser();
+      console.log('Current user:', user?.id);
+      
+      // Check user roles
+      const { data: userRoles, error: roleError } = await supabase
+        .from('user_roles')
+        .select('role')
+        .eq('user_id', user?.id);
+
+      console.log('User roles query result:', { userRoles, roleError });
+
+      if (roleError) {
+        console.error('Error fetching roles:', roleError);
+        await supabase.auth.signOut();
+        toast({
+          title: "Error checking permissions",
+          description: roleError.message,
+          variant: "destructive",
+        });
+        return;
+      }
+
+      // Check if user has any school-related roles
+      const schoolRoles = ['school_admin', 'school_teacher', 'school_student'];
+      const hasSchoolRole = userRoles?.some(role => schoolRoles.includes(role.role));
+      
+      // Check if user is super admin only
+      const isSuperAdminOnly = userRoles?.length === 1 && userRoles[0].role === 'super_admin';
+      
+      console.log('Has school role?', hasSchoolRole);
+      console.log('Is super admin only?', isSuperAdminOnly);
+      
+      if (isSuperAdminOnly) {
+        await supabase.auth.signOut();
+        toast({
+          title: "Access Denied",
+          description: "Super admins must use the Platform Admin login. Click 'Platform admin? Login here' below.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      if (!hasSchoolRole) {
+        await supabase.auth.signOut();
+        toast({
+          title: "Access Denied",
+          description: "You don't have the required school permissions. Please contact your administrator.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      toast({
+        title: "Welcome!",
+        description: "You have been logged in successfully.",
+      });
+      onAuthSuccess();
     } catch (error: any) {
+      console.error('Unexpected error:', error);
       toast({
         title: "Login failed",
         description: error.message,
