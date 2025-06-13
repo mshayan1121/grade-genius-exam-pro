@@ -93,12 +93,13 @@ serve(async (req) => {
       );
     }
 
-    // Extract course details
-    const qualification = answerData.questions.exams.courses.qualifications?.name || 'GCSE';
-    const subject = answerData.questions.exams.courses.subjects?.name || 'General';
-    const board = answerData.questions.exams.courses.boards?.name || 'AQA';
+    // Extract course details with safe navigation
+    const courseData = answerData.questions?.exams?.courses;
+    const qualification = courseData?.qualifications?.name || 'GCSE';
+    const subject = courseData?.subjects?.name || 'General';
+    const board = courseData?.boards?.name || 'AQA';
 
-    // Prepare the comprehensive evaluation prompt
+    // Prepare the evaluation prompt
     const systemPrompt = `You are an AI tutor and exam evaluator with expertise in UK qualifications such as ${board}, and ${qualification} across various boards (e.g., ${board}). You specialise in evaluating text-based student answers using subject-specific mark schemes and assessment objectives.
 
 You must use your internal knowledge of appropriate mark schemes for the given qualification, exam board, and subject — but do **not** explicitly mention the board or qualification in your response.
@@ -155,14 +156,14 @@ Do not include any formatting syntax such as triple quotes, code blocks, or any 
       question_image: answerData.questions.image_url || ''
     });
 
-    console.log('Calling OpenAI API with comprehensive prompt...');
+    console.log('Calling OpenAI API with prompt...');
 
     // Set up abort controller with timeout
     const controller = new AbortController();
     const timeoutId = setTimeout(() => {
       console.log('Request timed out, aborting...');
       controller.abort();
-    }, 30000); // 30 second timeout for more complex evaluation
+    }, 30000); // 30 second timeout
 
     let evaluation;
 
