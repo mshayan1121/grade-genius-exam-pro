@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -6,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Upload, Trash2 } from "lucide-react";
+import { Plus, Upload, Trash2, ArrowLeft } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 
@@ -33,7 +32,11 @@ interface Course {
   } | null;
 }
 
-const CreateExam = () => {
+interface CreateExamProps {
+  onBack?: () => void;
+}
+
+const CreateExam = ({ onBack }: CreateExamProps) => {
   const [examData, setExamData] = useState({
     name: "",
     courseId: "",
@@ -54,10 +57,10 @@ const CreateExam = () => {
       .from('courses')
       .select(`
         *,
-        qualification:qualifications(name),
-        board:boards(name),
-        subject:subjects(name),
-        year_group:year_groups(name)
+        qualification:qualification_id(name),
+        board:board_id(name),
+        subject:subject_id(name),
+        year_group:year_group_id(name)
       `)
       .order('name');
 
@@ -169,6 +172,13 @@ const CreateExam = () => {
 
   return (
     <div className="space-y-6">
+      {onBack && (
+        <Button variant="outline" onClick={onBack} className="mb-4">
+          <ArrowLeft className="w-4 h-4 mr-2" />
+          Back
+        </Button>
+      )}
+      
       <Card>
         <CardHeader>
           <CardTitle>Create New Exam</CardTitle>
