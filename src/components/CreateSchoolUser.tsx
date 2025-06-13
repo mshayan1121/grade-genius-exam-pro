@@ -54,13 +54,13 @@ const CreateSchoolUser = ({ schools, userRole, currentUserSchoolId, onUserCreate
     try {
       console.log('Creating user with email:', email, 'role:', selectedRole, 'school:', selectedSchool);
       
-      // Generate a temporary password
-      const tempPassword = Math.random().toString(36).slice(-8) + "Aa1!";
+      // Use default password
+      const defaultPassword = "12345";
       
       // Sign up the user using the regular signup flow
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email,
-        password: tempPassword,
+        password: defaultPassword,
         options: {
           emailRedirectTo: `${window.location.origin}/`
         }
@@ -95,7 +95,7 @@ const CreateSchoolUser = ({ schools, userRole, currentUserSchoolId, onUserCreate
 
       toast({
         title: "User created successfully",
-        description: `Account created for ${email}. Temporary password: ${tempPassword}`,
+        description: `Account created for ${email}. Default password: ${defaultPassword}`,
       });
 
       setEmail("");
