@@ -1,8 +1,9 @@
+
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, Eye, Brain } from "lucide-react";
+import { ArrowLeft, Eye, Brain, Clock } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 
@@ -33,6 +34,7 @@ const ViewResults = ({ onBack }: ViewResultsProps) => {
   const [submissions, setSubmissions] = useState<StudentAnswer[]>([]);
   const [selectedSubmission, setSelectedSubmission] = useState<StudentAnswer | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [evaluatingIds, setEvaluatingIds] = useState<Set<string>>(new Set());
   const { toast } = useToast();
 
   useEffect(() => {
@@ -70,7 +72,8 @@ const ViewResults = ({ onBack }: ViewResultsProps) => {
   };
 
   const evaluateAnswer = async (answerId: string) => {
-    setIsLoading(true);
+    setEvaluatingIds(prev => new Set([...prev, answerId]));
+    
     try {
       const { data, error } = await supabase.functions.invoke('evaluate-answer', {
         body: { answerId }
@@ -92,7 +95,11 @@ const ViewResults = ({ onBack }: ViewResultsProps) => {
         variant: "destructive",
       });
     } finally {
-      setIsLoading(false);
+      setEvaluatingIds(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(answerId);
+        return newSet;
+      });
     }
   };
 
@@ -101,6 +108,14 @@ const ViewResults = ({ onBack }: ViewResultsProps) => {
     if (percentage >= 80) return "bg-green-500";
     if (percentage >= 60) return "bg-yellow-500";
     return "bg-red-500";
+  };
+
+  // Check if submission was recently submitted (within last 5 minutes) and might be evaluating
+  const isRecentSubmission = (submittedAt: string) => {
+    const submissionTime = new Date(submittedAt).getTime();
+    const now = new Date().getTime();
+    const fiveMinutesAgo = now - (5 * 60 * 1000);
+    return submissionTime > fiveMinutesAgo;
   };
 
   if (selectedSubmission) {
@@ -219,7 +234,14 @@ const ViewResults = ({ onBack }: ViewResultsProps) => {
             ) : (
               <Card>
                 <CardContent className="text-center py-8">
-                  <p className="text-gray-500">This submission has not been evaluated yet.</p>
+                  {isRecentSubmission(selectedSubmission.submitted_at) ? (
+                    <div className="flex items-center justify-center gap-2 text-blue-600">
+                      <Clock className="w-5 h-5 animate-spin" />
+                      <p>AI evaluation in progress...</p>
+                    </div>
+                  ) : (
+                    <p className="text-gray-500">This submission has not been evaluated yet.</p>
+                  )}
                 </CardContent>
               </Card>
             )}
@@ -242,7 +264,7 @@ const ViewResults = ({ onBack }: ViewResultsProps) => {
 
         {isLoading && (
           <div className="text-center py-8">
-            <p>Processing evaluation...</p>
+            <p>Loading results...</p>
           </div>
         )}
 
@@ -254,54 +276,70 @@ const ViewResults = ({ onBack }: ViewResultsProps) => {
           </Card>
         ) : (
           <div className="grid gap-4">
-            {submissions.map((submission) => (
-              <Card key={submission.id} className="hover:shadow-lg transition-shadow">
-                <CardContent className="p-4">
-                  <div className="flex justify-between items-start">
-                    <div className="flex-1">
-                      <h3 className="font-semibold text-lg">{submission.student_name}</h3>
-                      <p className="text-gray-600">
-                        {submission.questions.exams.name} - Question {submission.questions.question_order}
-                      </p>
-                      <p className="text-sm text-gray-500">
-                        {new Date(submission.submitted_at).toLocaleString()}
-                      </p>
-                    </div>
-                    
-                    <div className="flex items-center gap-2">
-                      {submission.evaluated_result?.score !== undefined ? (
-                        <Badge className={getScoreColor(submission.evaluated_result.score, submission.questions.max_marks)}>
-                          {submission.evaluated_result.score}/{submission.questions.max_marks}
-                        </Badge>
-                      ) : (
-                        <Badge variant="secondary">Not Evaluated</Badge>
-                      )}
+            {submissions.map((submission) => {
+              const isEvaluating = evaluatingIds.has(submission.id);
+              const isRecent = isRecentSubmission(submission.submitted_at);
+              const showEvaluateButton = !submission.evaluated_result && !isEvaluating && !isRecent;
+              
+              return (
+                <Card key={submission.id} className="hover:shadow-lg transition-shadow">
+                  <CardContent className="p-4">
+                    <div className="flex justify-between items-start">
+                      <div className="flex-1">
+                        <h3 className="font-semibold text-lg">{submission.student_name}</h3>
+                        <p className="text-gray-600">
+                          {submission.questions.exams.name} - Question {submission.questions.question_order}
+                        </p>
+                        <p className="text-sm text-gray-500">
+                          {new Date(submission.submitted_at).toLocaleString()}
+                        </p>
+                      </div>
                       
-                      {!submission.evaluated_result && (
+                      <div className="flex items-center gap-2">
+                        {submission.evaluated_result?.score !== undefined ? (
+                          <Badge className={getScoreColor(submission.evaluated_result.score, submission.questions.max_marks)}>
+                            {submission.evaluated_result.score}/{submission.questions.max_marks}
+                          </Badge>
+                        ) : isEvaluating ? (
+                          <Badge variant="secondary" className="flex items-center gap-1">
+                            <Clock className="w-3 h-3 animate-spin" />
+                            Evaluating...
+                          </Badge>
+                        ) : isRecent ? (
+                          <Badge variant="secondary" className="flex items-center gap-1">
+                            <Clock className="w-3 h-3 animate-spin" />
+                            Processing...
+                          </Badge>
+                        ) : (
+                          <Badge variant="secondary">Not Evaluated</Badge>
+                        )}
+                        
+                        {showEvaluateButton && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => evaluateAnswer(submission.id)}
+                            disabled={isLoading}
+                          >
+                            <Brain className="w-4 h-4 mr-2" />
+                            Evaluate
+                          </Button>
+                        )}
+                        
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={() => evaluateAnswer(submission.id)}
-                          disabled={isLoading}
+                          onClick={() => setSelectedSubmission(submission)}
                         >
-                          <Brain className="w-4 h-4 mr-2" />
-                          Evaluate
+                          <Eye className="w-4 h-4 mr-2" />
+                          View Details
                         </Button>
-                      )}
-                      
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setSelectedSubmission(submission)}
-                      >
-                        <Eye className="w-4 h-4 mr-2" />
-                        View Details
-                      </Button>
+                      </div>
                     </div>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
+                  </CardContent>
+                </Card>
+              );
+            })}
           </div>
         )}
       </div>
