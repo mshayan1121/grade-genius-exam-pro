@@ -1,11 +1,11 @@
-import { useState, useEffect } from "react";
+
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Upload, Trash2, ArrowLeft } from "lucide-react";
+import { Plus, Trash2, ArrowLeft } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 
@@ -15,23 +15,6 @@ interface Question {
   maxMarks: number;
 }
 
-interface Course {
-  id: string;
-  name: string;
-  qualification: {
-    name: string;
-  } | null;
-  board: {
-    name: string;
-  } | null;
-  subject: {
-    name: string;
-  } | null;
-  year_group: {
-    name: string;
-  } | null;
-}
-
 interface CreateExamProps {
   onBack?: () => void;
 }
@@ -39,41 +22,12 @@ interface CreateExamProps {
 const CreateExam = ({ onBack }: CreateExamProps) => {
   const [examData, setExamData] = useState({
     name: "",
-    courseId: "",
   });
-  const [courses, setCourses] = useState<Course[]>([]);
   const [questions, setQuestions] = useState<Question[]>([
     { text: "", image: null, maxMarks: 10 }
   ]);
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
-
-  useEffect(() => {
-    loadCourses();
-  }, []);
-
-  const loadCourses = async () => {
-    const { data, error } = await supabase
-      .from('courses')
-      .select(`
-        *,
-        qualification:qualification_id(name),
-        board:board_id(name),
-        subject:subject_id(name),
-        year_group:year_group_id(name)
-      `)
-      .order('name');
-
-    if (error) {
-      toast({
-        title: "Error loading courses",
-        description: error.message,
-        variant: "destructive",
-      });
-    } else {
-      setCourses(data || []);
-    }
-  };
 
   const addQuestion = () => {
     setQuestions([...questions, { text: "", image: null, maxMarks: 10 }]);
@@ -114,12 +68,12 @@ const CreateExam = ({ onBack }: CreateExamProps) => {
     setIsLoading(true);
 
     try {
-      // Create exam with course_id
+      // Create exam without course_id
       const { data: examResult, error: examError } = await supabase
         .from('exams')
         .insert([{
           name: examData.name,
-          course_id: examData.courseId
+          course_id: null
         }])
         .select()
         .single();
@@ -155,7 +109,7 @@ const CreateExam = ({ onBack }: CreateExamProps) => {
       });
 
       // Reset form
-      setExamData({ name: "", courseId: "" });
+      setExamData({ name: "" });
       setQuestions([{ text: "", image: null, maxMarks: 10 }]);
     } catch (error: any) {
       toast({
@@ -167,8 +121,6 @@ const CreateExam = ({ onBack }: CreateExamProps) => {
       setIsLoading(false);
     }
   };
-
-  const selectedCourse = courses.find(c => c.id === examData.courseId);
 
   return (
     <div className="space-y-6">
@@ -199,29 +151,6 @@ const CreateExam = ({ onBack }: CreateExamProps) => {
                     required
                   />
                 </div>
-                <div>
-                  <Label htmlFor="course">Course</Label>
-                  <Select value={examData.courseId} onValueChange={(value) => setExamData({ ...examData, courseId: value })}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select a course" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {courses.map((course) => (
-                        <SelectItem key={course.id} value={course.id}>
-                          {course.name} - {course.subject?.name} ({course.board?.name})
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                {selectedCourse && (
-                  <div className="text-sm text-gray-600">
-                    <p><strong>Qualification:</strong> {selectedCourse.qualification?.name}</p>
-                    <p><strong>Board:</strong> {selectedCourse.board?.name}</p>
-                    <p><strong>Subject:</strong> {selectedCourse.subject?.name}</p>
-                    <p><strong>Year Group:</strong> {selectedCourse.year_group?.name}</p>
-                  </div>
-                )}
               </CardContent>
             </Card>
 
@@ -284,7 +213,7 @@ const CreateExam = ({ onBack }: CreateExamProps) => {
                 Add Question
               </Button>
               
-              <Button type="submit" disabled={isLoading || !examData.courseId}>
+              <Button type="submit" disabled={isLoading}>
                 {isLoading ? "Creating..." : "Create Exam"}
               </Button>
             </div>
