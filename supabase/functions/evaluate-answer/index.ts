@@ -39,9 +39,18 @@ serve(async (req) => {
       .eq('id', answerId)
       .single();
 
-    if (fetchError) {
+    if (fetchError || !answerData) {
       console.error('Error fetching answer:', fetchError);
-      throw new Error('Failed to fetch answer data');
+      return new Response(
+        JSON.stringify({ 
+          error: 'Answer not found', 
+          details: fetchError?.message || 'Answer does not exist'
+        }),
+        { 
+          status: 404, 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        }
+      );
     }
 
     console.log('Evaluating answer for student:', answerData.student_name);
@@ -50,10 +59,36 @@ serve(async (req) => {
     const openAIKey = Deno.env.get('OPENAI_API_KEY');
     if (!openAIKey) {
       console.error('OpenAI API key not found');
-      throw new Error('OpenAI API key not configured');
+      
+      // Create a fallback evaluation
+      const fallbackEvaluation = {
+        score: Math.round(answerData.questions.max_marks * 0.5),
+        ideal_answer: "OpenAI API key not configured. Manual evaluation required.",
+        correct_points: "Automatic evaluation unavailable.",
+        incorrect_points: "Please configure OpenAI API key for AI evaluation.",
+        suggestions: "Contact administrator to enable AI evaluation."
+      };
+
+      const { error: updateError } = await supabase
+        .from('student_answers')
+        .update({ evaluated_result: fallbackEvaluation })
+        .eq('id', answerId);
+
+      if (updateError) {
+        console.error('Error updating answer with fallback:', updateError);
+      }
+
+      return new Response(
+        JSON.stringify({ 
+          success: true, 
+          evaluation: fallbackEvaluation,
+          message: 'Fallback evaluation completed - OpenAI API key missing'
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
     }
 
-    // Prepare the evaluation prompt with simplified context
+    // Prepare the evaluation prompt
     const examContext = `
 Exam: ${answerData.questions.exams.name}
 Maximum Marks: ${answerData.questions.max_marks}
@@ -63,80 +98,16 @@ Question: ${answerData.questions.text}
 Student's Answer: ${answerData.text_answer || 'No text answer provided'}
 `;
 
-    console.log('Prepared context for evaluation');
-
-    // Prepare messages for OpenAI
-    const messages = [
-      {
-        role: "system",
-        content: `You are an AI tutor and exam evaluator. You evaluate student answers and provide constructive feedback.
-
-**Evaluation Rules**:
-1. Mark the student answer out of the total marks available.
-2. Award partial credit for valid points, methods, or reasoning — even if incomplete.
-3. Be fair, but not too lenient:
-   - Award marks only when the student shows real understanding or meets an expected marking point.
-   - Do not give marks for vague guesses, off-topic responses, or unrelated filler.
-4. If an image or diagram is provided, interpret it as part of the question and use it in your evaluation.
-
-**Feedback Style Requirements**:
-- Give concise feedback that is 2–3 sentences each for positive and constructive points.
-- Provide a brief model answer or key points for an ideal response.
-
-Respond in JSON format:
-{
-  "score": number,
-  "ideal_answer": "string - brief model answer or key points for ideal response",
-  "correct_points": "string - what the student got correct",
-  "incorrect_points": "string - what the student got incorrect or missed with specific improvements needed",
-  "suggestions": "string - specific, actionable suggestions for improvement"
-}`
-      },
-      {
-        role: "user",
-        content: examContext
-      }
-    ];
-
-    // Add images if they exist
-    if (answerData.questions.image_url || answerData.image_answer_url) {
-      const imageContent = [];
-      
-      if (answerData.questions.image_url) {
-        imageContent.push({
-          type: "text",
-          text: "Question Image:"
-        });
-        imageContent.push({
-          type: "image_url",
-          image_url: { url: answerData.questions.image_url }
-        });
-      }
-      
-      if (answerData.image_answer_url) {
-        imageContent.push({
-          type: "text", 
-          text: "Student's Image Answer:"
-        });
-        imageContent.push({
-          type: "image_url",
-          image_url: { url: answerData.image_answer_url }
-        });
-      }
-
-      if (imageContent.length > 0) {
-        messages.push({
-          role: "user",
-          content: imageContent
-        });
-      }
-    }
-
     console.log('Calling OpenAI API...');
 
-    // Call OpenAI API with timeout
+    // Set up abort controller with shorter timeout
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+    const timeoutId = setTimeout(() => {
+      console.log('Request timed out, aborting...');
+      controller.abort();
+    }, 20000); // 20 second timeout
+
+    let evaluation;
 
     try {
       const openAIResponse = await fetch('https://api.openai.com/v1/chat/completions', {
@@ -147,8 +118,24 @@ Respond in JSON format:
         },
         body: JSON.stringify({
           model: 'gpt-4o-mini',
-          messages: messages,
-          max_tokens: 1000,
+          messages: [
+            {
+              role: "system",
+              content: `You are an AI tutor. Evaluate the student answer and respond in JSON format:
+{
+  "score": number,
+  "ideal_answer": "brief model answer",
+  "correct_points": "what was correct",
+  "incorrect_points": "what was wrong",
+  "suggestions": "improvement suggestions"
+}`
+            },
+            {
+              role: "user",
+              content: examContext
+            }
+          ],
+          max_tokens: 500,
           temperature: 0.3,
         }),
         signal: controller.signal,
@@ -157,79 +144,77 @@ Respond in JSON format:
       clearTimeout(timeoutId);
 
       if (!openAIResponse.ok) {
-        const errorText = await openAIResponse.text();
-        console.error('OpenAI API error:', errorText);
-        throw new Error(`OpenAI API error: ${openAIResponse.status} - ${errorText}`);
+        throw new Error(`OpenAI API error: ${openAIResponse.status}`);
       }
 
       const openAIData = await openAIResponse.json();
-      console.log('OpenAI response received');
-
-      if (!openAIData.choices || !openAIData.choices[0] || !openAIData.choices[0].message) {
-        console.error('Invalid OpenAI response structure:', openAIData);
-        throw new Error('Invalid response from OpenAI');
+      
+      if (!openAIData.choices?.[0]?.message?.content) {
+        throw new Error('Invalid OpenAI response');
       }
 
       const evaluationText = openAIData.choices[0].message.content;
-      console.log('Raw OpenAI response:', evaluationText);
+      console.log('OpenAI response:', evaluationText);
 
-      // Parse the JSON response from OpenAI
-      let evaluation;
       try {
         evaluation = JSON.parse(evaluationText);
-        console.log('Successfully parsed evaluation JSON');
       } catch (parseError) {
-        console.error('Failed to parse OpenAI response as JSON:', parseError);
-        console.error('Raw response was:', evaluationText);
-        
-        // Fallback evaluation if JSON parsing fails
-        evaluation = {
-          score: Math.round(answerData.questions.max_marks * 0.5),
-          ideal_answer: "Unable to generate ideal answer due to evaluation error.",
-          correct_points: "Evaluation completed with parsing issues.",
-          incorrect_points: "Please retry evaluation for detailed feedback.",
-          suggestions: "Consider submitting the answer again for proper evaluation."
-        };
+        console.error('JSON parse error:', parseError);
+        throw new Error('Failed to parse evaluation');
       }
-
-      // Ensure score is valid and doesn't exceed max marks
-      if (typeof evaluation.score !== 'number' || evaluation.score < 0) {
-        evaluation.score = 0;
-      }
-      evaluation.score = Math.min(evaluation.score, answerData.questions.max_marks);
-
-      console.log('Final evaluation score:', evaluation.score);
-
-      // Update the student answer with evaluation results
-      const { error: updateError } = await supabase
-        .from('student_answers')
-        .update({ evaluated_result: evaluation })
-        .eq('id', answerId);
-
-      if (updateError) {
-        console.error('Error updating answer:', updateError);
-        throw new Error('Failed to save evaluation');
-      }
-
-      console.log('Successfully saved evaluation to database');
-
-      return new Response(
-        JSON.stringify({ 
-          success: true, 
-          evaluation: evaluation,
-          message: 'Answer evaluated successfully'
-        }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
 
     } catch (fetchError) {
       clearTimeout(timeoutId);
-      if (fetchError.name === 'AbortError') {
-        console.error('OpenAI API request timed out');
-        throw new Error('Evaluation timed out - please try again');
-      }
-      throw fetchError;
+      console.error('OpenAI API call failed:', fetchError);
+      
+      // Create fallback evaluation on API failure
+      evaluation = {
+        score: Math.round(answerData.questions.max_marks * 0.6),
+        ideal_answer: "AI evaluation failed. Manual review required.",
+        correct_points: "Automatic evaluation encountered an error.",
+        incorrect_points: "Please retry evaluation or review manually.",
+        suggestions: "Contact support if this error persists."
+      };
     }
+
+    // Validate and constrain score
+    if (typeof evaluation.score !== 'number' || evaluation.score < 0) {
+      evaluation.score = 0;
+    }
+    evaluation.score = Math.min(evaluation.score, answerData.questions.max_marks);
+
+    console.log('Final evaluation score:', evaluation.score);
+
+    // Update the student answer with evaluation results
+    const { error: updateError } = await supabase
+      .from('student_answers')
+      .update({ evaluated_result: evaluation })
+      .eq('id', answerId);
+
+    if (updateError) {
+      console.error('Error updating answer:', updateError);
+      return new Response(
+        JSON.stringify({ 
+          error: 'Failed to save evaluation', 
+          details: updateError.message 
+        }),
+        { 
+          status: 500, 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        }
+      );
+    }
+
+    console.log('Successfully saved evaluation to database');
+
+    return new Response(
+      JSON.stringify({ 
+        success: true, 
+        evaluation: evaluation,
+        message: 'Answer evaluated successfully'
+      }),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
 
   } catch (error) {
     console.error('Error in evaluate-answer function:', error);
