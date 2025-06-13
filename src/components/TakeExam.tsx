@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -119,10 +118,38 @@ const TakeExam = ({ onBack }: TakeExamProps) => {
     return urlData.publicUrl;
   };
 
+  const evaluateAnswer = async (answerId: string) => {
+    try {
+      const { data, error } = await supabase.functions.invoke('evaluate-answer', {
+        body: { answerId }
+      });
+
+      if (error) {
+        console.error('Evaluation error:', error);
+        toast({
+          title: "Evaluation failed",
+          description: "AI evaluation could not be completed, but your answer was saved.",
+          variant: "destructive",
+        });
+      } else {
+        console.log('Answer evaluated successfully:', data);
+      }
+    } catch (error: any) {
+      console.error('Evaluation error:', error);
+      toast({
+        title: "Evaluation failed", 
+        description: "AI evaluation could not be completed, but your answer was saved.",
+        variant: "destructive",
+      });
+    }
+  };
+
   const handleSubmit = async () => {
     setIsLoading(true);
 
     try {
+      const submittedAnswerIds: string[] = [];
+
       for (let i = 0; i < questions.length; i++) {
         const question = questions[i];
         const answer = answers[i];
@@ -133,22 +160,34 @@ const TakeExam = ({ onBack }: TakeExamProps) => {
           imageUrl = await uploadImage(answer.image, imagePath);
         }
 
-        const { error } = await supabase
+        const { data: insertedAnswer, error } = await supabase
           .from('student_answers')
           .insert([{
             question_id: question.id,
             student_name: studentName,
             text_answer: answer.text,
             image_answer_url: imageUrl
-          }]);
+          }])
+          .select('id')
+          .single();
 
         if (error) throw error;
+        
+        if (insertedAnswer) {
+          submittedAnswerIds.push(insertedAnswer.id);
+        }
       }
 
       toast({
         title: "Exam submitted successfully!",
-        description: "Your answers have been submitted for evaluation.",
+        description: "Your answers have been submitted and AI evaluation is starting...",
       });
+
+      // Start AI evaluation for all submitted answers
+      for (const answerId of submittedAnswerIds) {
+        // Don't await here to avoid blocking the UI - let evaluations run in background
+        evaluateAnswer(answerId);
+      }
 
       onBack();
     } catch (error: any) {
