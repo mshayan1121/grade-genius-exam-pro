@@ -96,11 +96,7 @@ const Index = () => {
   }
 
   if (currentPage === 'super-admin') {
-    return (
-      <BrowserRouter>
-        <SuperAdminDashboard onLogout={handleSignOut} />
-      </BrowserRouter>
-    );
+    return <SuperAdminDashboard onLogout={handleSignOut} />;
   }
 
   return (
