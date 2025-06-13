@@ -1,4 +1,5 @@
 
+
 -- First, let's drop the problematic RLS policies that are causing infinite recursion
 DROP POLICY IF EXISTS "Users can view their own roles" ON public.user_roles;
 DROP POLICY IF EXISTS "Super admins can manage all roles" ON public.user_roles;
@@ -39,3 +40,4 @@ AS $$
       AND (school_id = _school_id OR _school_id IS NULL OR school_id IS NULL)
   )
 $$;
+
