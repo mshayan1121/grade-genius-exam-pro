@@ -29,12 +29,21 @@ export const useUserRole = (user: User | null) => {
     if (!user) return;
 
     try {
+      console.log('Fetching user roles for user:', user.id);
+      
       const { data, error } = await supabase
         .from('user_roles')
         .select('*')
         .eq('user_id', user.id);
 
-      if (error) throw error;
+      console.log('User roles fetch result:', { data, error });
+
+      if (error) {
+        console.error('Error fetching user roles:', error);
+        throw error;
+      }
+      
+      console.log('User roles found:', data);
       setUserRoles(data || []);
     } catch (error) {
       console.error('Error fetching user roles:', error);
@@ -45,15 +54,22 @@ export const useUserRole = (user: User | null) => {
   };
 
   const hasRole = (role: AppRole, schoolId?: string) => {
-    return userRoles.some(userRole => {
+    const hasRoleResult = userRoles.some(userRole => {
       if (schoolId && userRole.school_id !== schoolId) {
         return false;
       }
       return userRole.role === role;
     });
+    console.log(`Checking if user has role ${role} (schoolId: ${schoolId}):`, hasRoleResult);
+    return hasRoleResult;
   };
 
-  const isSuperAdmin = () => hasRole('super_admin');
+  const isSuperAdmin = () => {
+    const result = hasRole('super_admin');
+    console.log('Is super admin check:', result);
+    return result;
+  };
+  
   const isSchoolAdmin = (schoolId?: string) => hasRole('school_admin', schoolId);
   const isTeacher = (schoolId?: string) => hasRole('school_teacher', schoolId);
   const isStudent = (schoolId?: string) => hasRole('school_student', schoolId);

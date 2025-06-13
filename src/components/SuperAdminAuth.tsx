@@ -28,25 +28,47 @@ const SuperAdminAuth = ({ onAuthSuccess, onSwitchToSchool }: SuperAdminAuthProps
     setIsLoading(true);
 
     try {
+      console.log('Attempting super admin sign in...');
+      
       const { error } = await supabase.auth.signInWithPassword({
         email,
         password,
       });
 
       if (error) {
+        console.error('Sign in error:', error);
         toast({
           title: "Login failed",
           description: error.message,
           variant: "destructive",
         });
       } else {
+        console.log('Sign in successful, checking roles...');
+        
+        // Get the current user
+        const { data: { user } } = await supabase.auth.getUser();
+        console.log('Current user:', user?.id);
+        
         // Check if user has super admin role
-        const { data: userRoles } = await supabase
+        const { data: userRoles, error: roleError } = await supabase
           .from('user_roles')
           .select('role')
-          .eq('user_id', (await supabase.auth.getUser()).data.user?.id);
+          .eq('user_id', user?.id);
+
+        console.log('User roles query result:', { userRoles, roleError });
+
+        if (roleError) {
+          console.error('Error fetching roles:', roleError);
+          toast({
+            title: "Error checking permissions",
+            description: roleError.message,
+            variant: "destructive",
+          });
+          return;
+        }
 
         const isSuperAdmin = userRoles?.some(role => role.role === 'super_admin');
+        console.log('Is super admin?', isSuperAdmin);
         
         if (!isSuperAdmin) {
           await supabase.auth.signOut();
@@ -65,6 +87,7 @@ const SuperAdminAuth = ({ onAuthSuccess, onSwitchToSchool }: SuperAdminAuthProps
         onAuthSuccess();
       }
     } catch (error: any) {
+      console.error('Unexpected error:', error);
       toast({
         title: "Login failed",
         description: error.message,
@@ -103,6 +126,8 @@ const SuperAdminAuth = ({ onAuthSuccess, onSwitchToSchool }: SuperAdminAuthProps
     try {
       const redirectUrl = `${window.location.origin}/`;
       
+      console.log('Creating super admin account...');
+      
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
@@ -112,12 +137,15 @@ const SuperAdminAuth = ({ onAuthSuccess, onSwitchToSchool }: SuperAdminAuthProps
       });
 
       if (error) {
+        console.error('Sign up error:', error);
         toast({
           title: "Sign up failed",
           description: error.message,
           variant: "destructive",
         });
       } else if (data.user) {
+        console.log('User created, adding super admin role...', data.user.id);
+        
         // Create super admin role for this user
         const { error: roleError } = await supabase
           .from('user_roles')
@@ -128,15 +156,22 @@ const SuperAdminAuth = ({ onAuthSuccess, onSwitchToSchool }: SuperAdminAuthProps
 
         if (roleError) {
           console.error('Error creating super admin role:', roleError);
+          toast({
+            title: "Role assignment failed",
+            description: "Account created but role assignment failed. Please contact support.",
+            variant: "destructive",
+          });
+        } else {
+          console.log('Super admin role assigned successfully');
+          toast({
+            title: "Account created!",
+            description: "Please check your email to confirm your account.",
+          });
+          setIsSignUp(false);
         }
-
-        toast({
-          title: "Account created!",
-          description: "Please check your email to confirm your account.",
-        });
-        setIsSignUp(false);
       }
     } catch (error: any) {
+      console.error('Unexpected signup error:', error);
       toast({
         title: "Sign up failed",
         description: error.message,
