@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -12,9 +13,13 @@ import { useToast } from "@/hooks/use-toast";
 interface Exam {
   id: string;
   name: string;
-  subject: string;
-  board: string;
-  qualification: string;
+  course_id: string;
+  course?: {
+    name: string;
+    qualification: string;
+    board: string;
+    subject: string;
+  };
 }
 
 interface Question {
@@ -51,7 +56,10 @@ const TakeExam = ({ onBack }: TakeExamProps) => {
   const loadExams = async () => {
     const { data, error } = await supabase
       .from('exams')
-      .select('*')
+      .select(`
+        *,
+        course:courses(name, qualification, board, subject)
+      `)
       .order('created_at', { ascending: false });
 
     if (error) {
@@ -238,7 +246,7 @@ const TakeExam = ({ onBack }: TakeExamProps) => {
                   <SelectContent>
                     {exams.map((exam) => (
                       <SelectItem key={exam.id} value={exam.id}>
-                        {exam.name} - {exam.subject} ({exam.board})
+                        {exam.name} - {exam.course?.subject} ({exam.course?.board})
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -255,6 +263,8 @@ const TakeExam = ({ onBack }: TakeExamProps) => {
     );
   }
 
+  const selectedExam = exams.find(e => e.id === selectedExamId);
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-green-50 to-emerald-100 p-4">
       <div className="container mx-auto max-w-4xl">
@@ -264,9 +274,14 @@ const TakeExam = ({ onBack }: TakeExamProps) => {
             Back to Exam Selection
           </Button>
           <h1 className="text-3xl font-bold text-gray-900">
-            {exams.find(e => e.id === selectedExamId)?.name}
+            {selectedExam?.name}
           </h1>
           <p className="text-gray-600">Student: {studentName}</p>
+          {selectedExam?.course && (
+            <p className="text-gray-600">
+              {selectedExam.course.subject} - {selectedExam.course.board} ({selectedExam.course.qualification})
+            </p>
+          )}
         </div>
 
         <div className="space-y-6">
