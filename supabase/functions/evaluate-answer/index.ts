@@ -31,9 +31,7 @@ serve(async (req) => {
           image_url,
           max_marks,
           exams (
-            subject,
-            board,
-            qualification
+            name
           )
         )
       `)
@@ -47,11 +45,9 @@ serve(async (req) => {
 
     console.log('Evaluating answer for student:', answerData.student_name);
 
-    // Prepare the evaluation prompt
+    // Prepare the evaluation prompt with simplified context
     const examContext = `
-Subject: ${answerData.questions.exams.subject}
-Board: ${answerData.questions.exams.board}
-Qualification: ${answerData.questions.exams.qualification}
+Exam: ${answerData.questions.exams.name}
 Maximum Marks: ${answerData.questions.max_marks}
 
 Question: ${answerData.questions.text}
@@ -63,26 +59,17 @@ Student's Answer: ${answerData.text_answer || 'No text answer provided'}
     const messages = [
       {
         role: "system",
-        content: `You are an AI tutor and exam evaluator with expertise in UK qualifications such as ${answerData.questions.exams.qualification} across various boards (e.g., ${answerData.questions.exams.board}). You specialise in evaluating text-based student answers using subject-specific mark schemes and assessment objectives.
-
-You must use your internal knowledge of appropriate mark schemes for the given qualification, exam board, and subject — but do not explicitly mention the board or qualification in your response.
-Ensure all feedback is strictly relevant to the scope of the given qualification, board, and subject only.
-Do not reference topics, expectations, or standards outside the level or curriculum of the provided context.
+        content: `You are an AI tutor and exam evaluator. You evaluate student answers and provide constructive feedback.
 
 **Evaluation Rules**:
 1. Mark the student answer out of the total marks available.
-2. For sciences, use AO1 (Knowledge), AO2 (Application), AO3 (Analysis/Evaluation).
-   For Business and Economics, use AO1 (Knowledge), AO2 (Application), AO3 (Analysis), AO4 (Evaluation).
-   Label each point in the feedback with the correct AO based on the subject.
-3. Use the qualification, board, and subject to adapt your expectations appropriately.
-4. Award partial credit for valid points, methods, or reasoning — even if incomplete.
-5. Be fair, but not too lenient:
+2. Award partial credit for valid points, methods, or reasoning — even if incomplete.
+3. Be fair, but not too lenient:
    - Award marks only when the student shows real understanding or meets an expected marking point.
    - Do not give marks for vague guesses, off-topic responses, or unrelated filler.
-6. If an image or diagram is provided, interpret it as part of the question and use it in your evaluation. Do not ignore it. Do not mention the image explicitly in your output.
+4. If an image or diagram is provided, interpret it as part of the question and use it in your evaluation.
 
 **Feedback Style Requirements**:
-- Avoid generic exclamations like "Excellent job" or "Well done."
 - Give concise feedback that is 2–3 sentences each for positive and constructive points.
 - Provide a brief model answer or key points for an ideal response.
 
@@ -90,9 +77,9 @@ Respond in JSON format:
 {
   "score": number,
   "ideal_answer": "string - brief model answer or key points for ideal response",
-  "correct_points": "string - what the student got correct with specific AO labels",
+  "correct_points": "string - what the student got correct",
   "incorrect_points": "string - what the student got incorrect or missed with specific improvements needed",
-  "suggestions": "string - specific, actionable suggestions for improvement aligned with the qualification level"
+  "suggestions": "string - specific, actionable suggestions for improvement"
 }`
       },
       {

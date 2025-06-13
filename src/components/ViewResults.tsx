@@ -21,17 +21,6 @@ interface StudentAnswer {
     question_order: number;
     exams: {
       name: string;
-      courses: {
-        subject: {
-          name: string;
-        } | null;
-        board: {
-          name: string;
-        } | null;
-        qualification: {
-          name: string;
-        } | null;
-      };
     };
   };
 }
@@ -58,12 +47,7 @@ const ViewResults = ({ onBack }: ViewResultsProps) => {
           max_marks,
           question_order,
           exams (
-            name,
-            courses (
-              subject:subjects(name),
-              board:boards(name),
-              qualification:qualifications(name)
-            )
+            name
           )
         )
       `)
@@ -183,9 +167,6 @@ const ViewResults = ({ onBack }: ViewResultsProps) => {
               <CardContent>
                 <p><strong>Name:</strong> {selectedSubmission.student_name}</p>
                 <p><strong>Exam:</strong> {selectedSubmission.questions.exams.name}</p>
-                <p><strong>Subject:</strong> {selectedSubmission.questions.exams.courses.subject?.name}</p>
-                <p><strong>Board:</strong> {selectedSubmission.questions.exams.courses.board?.name}</p>
-                <p><strong>Qualification:</strong> {selectedSubmission.questions.exams.courses.qualification?.name}</p>
                 <p><strong>Submitted:</strong> {new Date(selectedSubmission.submitted_at).toLocaleString()}</p>
               </CardContent>
             </Card>
@@ -334,9 +315,6 @@ const ViewResults = ({ onBack }: ViewResultsProps) => {
                         <h3 className="font-semibold text-lg">{submission.student_name}</h3>
                         <p className="text-gray-600">
                           {submission.questions.exams.name} - Question {submission.questions.question_order}
-                        </p>
-                        <p className="text-sm text-gray-500">
-                          {submission.questions.exams.courses.subject?.name} | {submission.questions.exams.courses.board?.name}
                         </p>
                         <p className="text-sm text-gray-500">
                           {new Date(submission.submitted_at).toLocaleString()}
