@@ -6,13 +6,15 @@ import CreateExam from "@/components/CreateExam";
 import TakeExam from "@/components/TakeExam";
 import ViewResults from "@/components/ViewResults";
 import AdminDashboard from "@/components/AdminDashboard";
+import SuperAdminDashboard from "@/components/admin/SuperAdminDashboard";
 import AuthSelector from "@/components/AuthSelector";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useUserRole } from "@/hooks/useUserRole";
 import { User, Session } from '@supabase/supabase-js';
+import { BrowserRouter } from "react-router-dom";
 
-type Page = 'home' | 'create' | 'take' | 'results' | 'admin';
+type Page = 'home' | 'create' | 'take' | 'results' | 'admin' | 'super-admin';
 
 const Index = () => {
   const [currentPage, setCurrentPage] = useState<Page>('home');
@@ -93,6 +95,14 @@ const Index = () => {
     return <AdminDashboard onBack={() => setCurrentPage('home')} currentUser={user} />;
   }
 
+  if (currentPage === 'super-admin') {
+    return (
+      <BrowserRouter>
+        <SuperAdminDashboard onLogout={handleSignOut} />
+      </BrowserRouter>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
       <div className="container mx-auto px-4 py-8">
@@ -108,7 +118,13 @@ const Index = () => {
             </p>
           </div>
           <div className="flex gap-2">
-            {(isSuperAdmin() || isSchoolAdmin()) && (
+            {isSuperAdmin() && (
+              <Button variant="outline" onClick={() => setCurrentPage('super-admin')}>
+                <Settings className="w-4 h-4 mr-2" />
+                Super Admin
+              </Button>
+            )}
+            {isSchoolAdmin() && (
               <Button variant="outline" onClick={() => setCurrentPage('admin')}>
                 <Settings className="w-4 h-4 mr-2" />
                 Admin
