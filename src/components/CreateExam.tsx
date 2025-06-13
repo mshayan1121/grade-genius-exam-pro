@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ArrowLeft, Plus, Upload, Trash2 } from "lucide-react";
+import { Plus, Upload, Trash2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 
@@ -19,16 +19,21 @@ interface Question {
 interface Course {
   id: string;
   name: string;
-  qualification: string;
-  board: string;
-  subject: string;
+  qualification: {
+    name: string;
+  } | null;
+  board: {
+    name: string;
+  } | null;
+  subject: {
+    name: string;
+  } | null;
+  year_group: {
+    name: string;
+  } | null;
 }
 
-interface CreateExamProps {
-  onBack: () => void;
-}
-
-const CreateExam = ({ onBack }: CreateExamProps) => {
+const CreateExam = () => {
   const [examData, setExamData] = useState({
     name: "",
     courseId: "",
@@ -47,7 +52,13 @@ const CreateExam = ({ onBack }: CreateExamProps) => {
   const loadCourses = async () => {
     const { data, error } = await supabase
       .from('courses')
-      .select('*')
+      .select(`
+        *,
+        qualification:qualifications(name),
+        board:boards(name),
+        subject:subjects(name),
+        year_group:year_groups(name)
+      `)
       .order('name');
 
     if (error) {
@@ -140,7 +151,9 @@ const CreateExam = ({ onBack }: CreateExamProps) => {
         description: `${examData.name} has been created with ${questions.length} questions.`,
       });
 
-      onBack();
+      // Reset form
+      setExamData({ name: "", courseId: "" });
+      setQuestions([{ text: "", image: null, maxMarks: 10 }]);
     } catch (error: any) {
       toast({
         title: "Error creating exam",
@@ -155,121 +168,119 @@ const CreateExam = ({ onBack }: CreateExamProps) => {
   const selectedCourse = courses.find(c => c.id === examData.courseId);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
-      <div className="container mx-auto max-w-4xl">
-        <div className="mb-6">
-          <Button variant="ghost" onClick={onBack} className="mb-4">
-            <ArrowLeft className="w-4 h-4 mr-2" />
-            Back to Home
-          </Button>
-          <h1 className="text-3xl font-bold text-gray-900">Create New Exam</h1>
-        </div>
-
-        <form onSubmit={handleSubmit} className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Exam Details</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div>
-                <Label htmlFor="name">Exam Name</Label>
-                <Input
-                  id="name"
-                  value={examData.name}
-                  onChange={(e) => setExamData({ ...examData, name: e.target.value })}
-                  required
-                />
-              </div>
-              <div>
-                <Label htmlFor="course">Course</Label>
-                <Select value={examData.courseId} onValueChange={(value) => setExamData({ ...examData, courseId: value })}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select a course" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {courses.map((course) => (
-                      <SelectItem key={course.id} value={course.id}>
-                        {course.name} - {course.subject} ({course.board})
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              {selectedCourse && (
-                <div className="text-sm text-gray-600">
-                  <p><strong>Qualification:</strong> {selectedCourse.qualification}</p>
-                  <p><strong>Board:</strong> {selectedCourse.board}</p>
-                  <p><strong>Subject:</strong> {selectedCourse.subject}</p>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          {questions.map((question, index) => (
-            <Card key={index}>
-              <CardHeader className="flex flex-row items-center justify-between">
-                <CardTitle>Question {index + 1}</CardTitle>
-                {questions.length > 1 && (
-                  <Button
-                    type="button"
-                    variant="destructive"
-                    size="sm"
-                    onClick={() => removeQuestion(index)}
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </Button>
-                )}
+    <div className="space-y-6">
+      <Card>
+        <CardHeader>
+          <CardTitle>Create New Exam</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={handleSubmit} className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>Exam Details</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div>
-                  <Label htmlFor={`question-${index}`}>Question Text</Label>
-                  <Textarea
-                    id={`question-${index}`}
-                    value={question.text}
-                    onChange={(e) => updateQuestion(index, 'text', e.target.value)}
-                    placeholder="Enter your question here..."
+                  <Label htmlFor="name">Exam Name</Label>
+                  <Input
+                    id="name"
+                    value={examData.name}
+                    onChange={(e) => setExamData({ ...examData, name: e.target.value })}
                     required
                   />
                 </div>
-                
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <Label htmlFor={`image-${index}`}>Question Image (Optional)</Label>
-                    <Input
-                      id={`image-${index}`}
-                      type="file"
-                      accept="image/*"
-                      onChange={(e) => handleImageUpload(index, e.target.files?.[0] || null)}
-                    />
+                <div>
+                  <Label htmlFor="course">Course</Label>
+                  <Select value={examData.courseId} onValueChange={(value) => setExamData({ ...examData, courseId: value })}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select a course" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {courses.map((course) => (
+                        <SelectItem key={course.id} value={course.id}>
+                          {course.name} - {course.subject?.name} ({course.board?.name})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                {selectedCourse && (
+                  <div className="text-sm text-gray-600">
+                    <p><strong>Qualification:</strong> {selectedCourse.qualification?.name}</p>
+                    <p><strong>Board:</strong> {selectedCourse.board?.name}</p>
+                    <p><strong>Subject:</strong> {selectedCourse.subject?.name}</p>
+                    <p><strong>Year Group:</strong> {selectedCourse.year_group?.name}</p>
                   </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {questions.map((question, index) => (
+              <Card key={index}>
+                <CardHeader className="flex flex-row items-center justify-between">
+                  <CardTitle>Question {index + 1}</CardTitle>
+                  {questions.length > 1 && (
+                    <Button
+                      type="button"
+                      variant="destructive"
+                      size="sm"
+                      onClick={() => removeQuestion(index)}
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
+                  )}
+                </CardHeader>
+                <CardContent className="space-y-4">
                   <div>
-                    <Label htmlFor={`marks-${index}`}>Maximum Marks</Label>
-                    <Input
-                      id={`marks-${index}`}
-                      type="number"
-                      value={question.maxMarks}
-                      onChange={(e) => updateQuestion(index, 'maxMarks', parseInt(e.target.value) || 0)}
-                      min="1"
+                    <Label htmlFor={`question-${index}`}>Question Text</Label>
+                    <Textarea
+                      id={`question-${index}`}
+                      value={question.text}
+                      onChange={(e) => updateQuestion(index, 'text', e.target.value)}
+                      placeholder="Enter your question here..."
                       required
                     />
                   </div>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <Label htmlFor={`image-${index}`}>Question Image (Optional)</Label>
+                      <Input
+                        id={`image-${index}`}
+                        type="file"
+                        accept="image/*"
+                        onChange={(e) => handleImageUpload(index, e.target.files?.[0] || null)}
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor={`marks-${index}`}>Maximum Marks</Label>
+                      <Input
+                        id={`marks-${index}`}
+                        type="number"
+                        value={question.maxMarks}
+                        onChange={(e) => updateQuestion(index, 'maxMarks', parseInt(e.target.value) || 0)}
+                        min="1"
+                        required
+                      />
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
 
-          <div className="flex justify-between">
-            <Button type="button" variant="outline" onClick={addQuestion}>
-              <Plus className="w-4 h-4 mr-2" />
-              Add Question
-            </Button>
-            
-            <Button type="submit" disabled={isLoading || !examData.courseId}>
-              {isLoading ? "Creating..." : "Create Exam"}
-            </Button>
-          </div>
-        </form>
-      </div>
+            <div className="flex justify-between">
+              <Button type="button" variant="outline" onClick={addQuestion}>
+                <Plus className="w-4 h-4 mr-2" />
+                Add Question
+              </Button>
+              
+              <Button type="submit" disabled={isLoading || !examData.courseId}>
+                {isLoading ? "Creating..." : "Create Exam"}
+              </Button>
+            </div>
+          </form>
+        </CardContent>
+      </Card>
     </div>
   );
 };

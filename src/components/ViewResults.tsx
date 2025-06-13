@@ -22,9 +22,15 @@ interface StudentAnswer {
     exams: {
       name: string;
       courses: {
-        subject: string;
-        board: string;
-        qualification: string;
+        subject: {
+          name: string;
+        } | null;
+        board: {
+          name: string;
+        } | null;
+        qualification: {
+          name: string;
+        } | null;
       };
     };
   };
@@ -54,9 +60,9 @@ const ViewResults = ({ onBack }: ViewResultsProps) => {
           exams (
             name,
             courses (
-              subject,
-              board,
-              qualification
+              subject:subjects(name),
+              board:boards(name),
+              qualification:qualifications(name)
             )
           )
         )
@@ -177,9 +183,9 @@ const ViewResults = ({ onBack }: ViewResultsProps) => {
               <CardContent>
                 <p><strong>Name:</strong> {selectedSubmission.student_name}</p>
                 <p><strong>Exam:</strong> {selectedSubmission.questions.exams.name}</p>
-                <p><strong>Subject:</strong> {selectedSubmission.questions.exams.courses.subject}</p>
-                <p><strong>Board:</strong> {selectedSubmission.questions.exams.courses.board}</p>
-                <p><strong>Qualification:</strong> {selectedSubmission.questions.exams.courses.qualification}</p>
+                <p><strong>Subject:</strong> {selectedSubmission.questions.exams.courses.subject?.name}</p>
+                <p><strong>Board:</strong> {selectedSubmission.questions.exams.courses.board?.name}</p>
+                <p><strong>Qualification:</strong> {selectedSubmission.questions.exams.courses.qualification?.name}</p>
                 <p><strong>Submitted:</strong> {new Date(selectedSubmission.submitted_at).toLocaleString()}</p>
               </CardContent>
             </Card>
@@ -330,7 +336,7 @@ const ViewResults = ({ onBack }: ViewResultsProps) => {
                           {submission.questions.exams.name} - Question {submission.questions.question_order}
                         </p>
                         <p className="text-sm text-gray-500">
-                          {submission.questions.exams.courses.subject} | {submission.questions.exams.courses.board}
+                          {submission.questions.exams.courses.subject?.name} | {submission.questions.exams.courses.board?.name}
                         </p>
                         <p className="text-sm text-gray-500">
                           {new Date(submission.submitted_at).toLocaleString()}

@@ -16,9 +16,15 @@ interface Exam {
   course_id: string;
   course?: {
     name: string;
-    qualification: string;
-    board: string;
-    subject: string;
+    qualification: {
+      name: string;
+    } | null;
+    board: {
+      name: string;
+    } | null;
+    subject: {
+      name: string;
+    } | null;
   };
 }
 
@@ -58,7 +64,12 @@ const TakeExam = ({ onBack }: TakeExamProps) => {
       .from('exams')
       .select(`
         *,
-        course:courses(name, qualification, board, subject)
+        course:courses(
+          name,
+          qualification:qualifications(name),
+          board:boards(name),
+          subject:subjects(name)
+        )
       `)
       .order('created_at', { ascending: false });
 
@@ -246,7 +257,7 @@ const TakeExam = ({ onBack }: TakeExamProps) => {
                   <SelectContent>
                     {exams.map((exam) => (
                       <SelectItem key={exam.id} value={exam.id}>
-                        {exam.name} - {exam.course?.subject} ({exam.course?.board})
+                        {exam.name} - {exam.course?.subject?.name} ({exam.course?.board?.name})
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -279,7 +290,7 @@ const TakeExam = ({ onBack }: TakeExamProps) => {
           <p className="text-gray-600">Student: {studentName}</p>
           {selectedExam?.course && (
             <p className="text-gray-600">
-              {selectedExam.course.subject} - {selectedExam.course.board} ({selectedExam.course.qualification})
+              {selectedExam.course.subject?.name} - {selectedExam.course.board?.name} ({selectedExam.course.qualification?.name})
             </p>
           )}
         </div>
