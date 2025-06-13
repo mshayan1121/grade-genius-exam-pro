@@ -16,8 +16,10 @@ interface SuperAdminAuthProps {
 const SuperAdminAuth = ({ onAuthSuccess, onSwitchToSchool }: SuperAdminAuthProps) => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [isSignUp, setIsSignUp] = useState(false);
   const { toast } = useToast();
 
   const handleSignIn = async (e: React.FormEvent) => {
@@ -72,6 +74,67 @@ const SuperAdminAuth = ({ onAuthSuccess, onSwitchToSchool }: SuperAdminAuthProps
     }
   };
 
+  const handleSignUp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsLoading(true);
+
+    if (password !== confirmPassword) {
+      toast({
+        title: "Password mismatch",
+        description: "Passwords do not match",
+        variant: "destructive",
+      });
+      setIsLoading(false);
+      return;
+    }
+
+    try {
+      const redirectUrl = `${window.location.origin}/`;
+      
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          emailRedirectTo: redirectUrl
+        }
+      });
+
+      if (error) {
+        toast({
+          title: "Sign up failed",
+          description: error.message,
+          variant: "destructive",
+        });
+      } else if (data.user) {
+        // Create super admin role for this user
+        const { error: roleError } = await supabase
+          .from('user_roles')
+          .insert({
+            user_id: data.user.id,
+            role: 'super_admin'
+          });
+
+        if (roleError) {
+          console.error('Error creating super admin role:', roleError);
+        }
+
+        toast({
+          title: "Account created!",
+          description: "Please check your email to confirm your account.",
+        });
+        setIsSignUp(false);
+      }
+    } catch (error: any) {
+      toast({
+        title: "Sign up failed",
+        description: error.message,
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-50 to-indigo-100 flex items-center justify-center p-4">
       <Card className="w-full max-w-md">
@@ -80,10 +143,12 @@ const SuperAdminAuth = ({ onAuthSuccess, onSwitchToSchool }: SuperAdminAuthProps
             <Shield className="w-6 h-6 text-purple-600" />
           </div>
           <CardTitle className="text-2xl">Super Admin Portal</CardTitle>
-          <p className="text-sm text-gray-600">Platform administration access</p>
+          <p className="text-sm text-gray-600">
+            {isSignUp ? "Create your admin account" : "Platform administration access"}
+          </p>
         </CardHeader>
         <CardContent className="space-y-4">
-          <form onSubmit={handleSignIn} className="space-y-4">
+          <form onSubmit={isSignUp ? handleSignUp : handleSignIn} className="space-y-4">
             <div>
               <Label htmlFor="email">Email</Label>
               <Input
@@ -116,12 +181,34 @@ const SuperAdminAuth = ({ onAuthSuccess, onSwitchToSchool }: SuperAdminAuthProps
                 </Button>
               </div>
             </div>
+            {isSignUp && (
+              <div>
+                <Label htmlFor="confirmPassword">Confirm Password</Label>
+                <Input
+                  id="confirmPassword"
+                  type="password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  required
+                />
+              </div>
+            )}
             <Button type="submit" className="w-full" disabled={isLoading}>
-              {isLoading ? "Signing in..." : "Sign In as Super Admin"}
+              {isLoading 
+                ? (isSignUp ? "Creating account..." : "Signing in...") 
+                : (isSignUp ? "Create Super Admin Account" : "Sign In as Super Admin")
+              }
             </Button>
           </form>
           
-          <div className="text-center">
+          <div className="text-center space-y-2">
+            <Button 
+              variant="link" 
+              onClick={() => setIsSignUp(!isSignUp)} 
+              className="text-sm"
+            >
+              {isSignUp ? "Already have an account? Sign in" : "Need an account? Sign up"}
+            </Button>
             <Button variant="link" onClick={onSwitchToSchool} className="text-sm">
               School user? Login here →
             </Button>
