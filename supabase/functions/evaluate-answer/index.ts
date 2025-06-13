@@ -88,24 +88,46 @@ serve(async (req) => {
       );
     }
 
-    // Prepare the evaluation prompt
+    // Prepare the comprehensive evaluation prompt
+    const systemPrompt = `You are an experienced teacher and examiner. Your task is to evaluate a student's answer to an exam question fairly and constructively.
+
+Please analyze the student's response and provide a detailed evaluation in the following JSON format:
+
+{
+  "score": number (between 0 and the maximum marks available),
+  "ideal_answer": "A comprehensive model answer that demonstrates what a full-marks response should include",
+  "correct_points": "Detailed analysis of what the student got right, including specific concepts, facts, or reasoning that were accurate",
+  "incorrect_points": "Detailed analysis of what was wrong, missing, or could be improved, with specific explanations",
+  "suggestions": "Constructive advice on how the student can improve their understanding and answer quality for similar questions in the future"
+}
+
+When scoring:
+- Award full marks for complete, accurate, and well-explained answers
+- Give partial credit for partially correct responses
+- Consider both factual accuracy and quality of explanation
+- Be fair but maintain academic standards
+- Provide specific, actionable feedback`;
+
     const examContext = `
-Exam: ${answerData.questions.exams.name}
-Maximum Marks: ${answerData.questions.max_marks}
+EXAM: ${answerData.questions.exams.name}
+MAXIMUM MARKS AVAILABLE: ${answerData.questions.max_marks}
 
-Question: ${answerData.questions.text}
+QUESTION:
+${answerData.questions.text}
 
-Student's Answer: ${answerData.text_answer || 'No text answer provided'}
-`;
+STUDENT'S ANSWER:
+${answerData.text_answer || 'No text answer provided'}
 
-    console.log('Calling OpenAI API...');
+Please evaluate this answer according to the instructions above.`;
 
-    // Set up abort controller with shorter timeout
+    console.log('Calling OpenAI API with comprehensive prompt...');
+
+    // Set up abort controller with timeout
     const controller = new AbortController();
     const timeoutId = setTimeout(() => {
       console.log('Request timed out, aborting...');
       controller.abort();
-    }, 20000); // 20 second timeout
+    }, 30000); // 30 second timeout for more complex evaluation
 
     let evaluation;
 
@@ -121,21 +143,14 @@ Student's Answer: ${answerData.text_answer || 'No text answer provided'}
           messages: [
             {
               role: "system",
-              content: `You are an AI tutor. Evaluate the student answer and respond in JSON format:
-{
-  "score": number,
-  "ideal_answer": "brief model answer",
-  "correct_points": "what was correct",
-  "incorrect_points": "what was wrong",
-  "suggestions": "improvement suggestions"
-}`
+              content: systemPrompt
             },
             {
               role: "user",
               content: examContext
             }
           ],
-          max_tokens: 500,
+          max_tokens: 800,
           temperature: 0.3,
         }),
         signal: controller.signal,
@@ -154,10 +169,12 @@ Student's Answer: ${answerData.text_answer || 'No text answer provided'}
       }
 
       const evaluationText = openAIData.choices[0].message.content;
-      console.log('OpenAI response:', evaluationText);
+      console.log('OpenAI response received');
+      console.log('Raw OpenAI response:', evaluationText);
 
       try {
         evaluation = JSON.parse(evaluationText);
+        console.log('Successfully parsed evaluation JSON');
       } catch (parseError) {
         console.error('JSON parse error:', parseError);
         throw new Error('Failed to parse evaluation');
