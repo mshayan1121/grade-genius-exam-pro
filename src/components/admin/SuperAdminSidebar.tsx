@@ -1,5 +1,4 @@
 
-import { useState } from "react";
 import { NavLink, useLocation } from "react-router-dom";
 import {
   Sidebar,
@@ -84,23 +83,24 @@ const groupedItems = menuItems.reduce((acc, item) => {
 }, {} as Record<string, typeof menuItems>);
 
 export function SuperAdminSidebar() {
-  const { collapsed } = useSidebar();
+  const { state } = useSidebar();
   const location = useLocation();
   const currentPath = location.pathname;
 
+  const isCollapsed = state === "collapsed";
   const isActive = (path: string) => currentPath === path;
   const getNavCls = ({ isActive }: { isActive: boolean }) =>
     isActive ? "bg-purple-100 text-purple-700 font-medium" : "hover:bg-gray-100";
 
   return (
-    <Sidebar className={collapsed ? "w-14" : "w-64"} collapsible>
+    <Sidebar className={isCollapsed ? "w-14" : "w-64"} collapsible="icon">
       <SidebarTrigger className="m-2 self-end" />
       
       <SidebarContent>
         {Object.entries(groupedItems).map(([groupName, items]) => (
           <SidebarGroup key={groupName}>
             <SidebarGroupLabel className="text-purple-600 font-semibold">
-              {!collapsed && groupName}
+              {!isCollapsed && groupName}
             </SidebarGroupLabel>
             <SidebarGroupContent>
               <SidebarMenu>
@@ -109,7 +109,7 @@ export function SuperAdminSidebar() {
                     <SidebarMenuButton asChild>
                       <NavLink to={item.url} className={getNavCls}>
                         <item.icon className="h-4 w-4" />
-                        {!collapsed && <span className="ml-2">{item.title}</span>}
+                        {!isCollapsed && <span className="ml-2">{item.title}</span>}
                       </NavLink>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
