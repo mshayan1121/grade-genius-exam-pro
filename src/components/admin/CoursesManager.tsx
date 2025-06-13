@@ -10,7 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
-import { Trash2, Plus } from "lucide-react";
+import { Trash2, Plus, BookOpen, FileText } from "lucide-react";
 
 const CoursesManager = () => {
   const [name, setName] = useState("");
@@ -22,9 +22,9 @@ const CoursesManager = () => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  // Fetch all required data
+  // Fetch courses with exams
   const { data: courses, isLoading } = useQuery({
-    queryKey: ['courses'],
+    queryKey: ['courses-with-exams'],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('courses')
@@ -33,7 +33,8 @@ const CoursesManager = () => {
           qualifications(name),
           boards(name),
           subjects(name),
-          year_groups(name)
+          year_groups(name),
+          exams(id, name, created_at)
         `)
         .order('name');
       
@@ -42,6 +43,7 @@ const CoursesManager = () => {
     }
   });
 
+  // Fetch all required data for dropdowns
   const { data: qualifications } = useQuery({
     queryKey: ['qualifications'],
     queryFn: async () => {
@@ -87,7 +89,7 @@ const CoursesManager = () => {
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['courses'] });
+      queryClient.invalidateQueries({ queryKey: ['courses-with-exams'] });
       resetForm();
       toast({ title: "Course created successfully" });
     },
@@ -110,7 +112,7 @@ const CoursesManager = () => {
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['courses'] });
+      queryClient.invalidateQueries({ queryKey: ['courses-with-exams'] });
       toast({ title: "Course deleted successfully" });
     },
     onError: (error: any) => {
@@ -255,32 +257,32 @@ const CoursesManager = () => {
 
       <Card>
         <CardHeader>
-          <CardTitle>Courses</CardTitle>
+          <CardTitle className="flex items-center gap-2">
+            <BookOpen className="w-5 h-5" />
+            Courses & Their Exams
+          </CardTitle>
         </CardHeader>
         <CardContent>
           {isLoading ? (
             <p>Loading courses...</p>
           ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Qualification</TableHead>
-                  <TableHead>Board</TableHead>
-                  <TableHead>Subject</TableHead>
-                  <TableHead>Year Group</TableHead>
-                  <TableHead>Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {courses?.map((course) => (
-                  <TableRow key={course.id}>
-                    <TableCell className="font-medium">{course.name}</TableCell>
-                    <TableCell>{course.qualifications?.name}</TableCell>
-                    <TableCell>{course.boards?.name}</TableCell>
-                    <TableCell>{course.subjects?.name}</TableCell>
-                    <TableCell>{course.year_groups?.name}</TableCell>
-                    <TableCell>
+            <div className="space-y-4">
+              {courses?.map((course) => (
+                <Card key={course.id} className="border-l-4 border-l-blue-500">
+                  <CardHeader className="pb-3">
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <CardTitle className="text-lg">{course.name}</CardTitle>
+                        <div className="text-sm text-gray-600 mt-1">
+                          <span className="font-medium">{course.qualifications?.name}</span> • 
+                          <span className="ml-1">{course.boards?.name}</span> • 
+                          <span className="ml-1">{course.subjects?.name}</span> • 
+                          <span className="ml-1">{course.year_groups?.name}</span>
+                        </div>
+                        {course.description && (
+                          <p className="text-sm text-gray-500 mt-2">{course.description}</p>
+                        )}
+                      </div>
                       <Button
                         variant="destructive"
                         size="sm"
@@ -289,11 +291,35 @@ const CoursesManager = () => {
                       >
                         <Trash2 className="w-4 h-4" />
                       </Button>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="pt-0">
+                    <div className="flex items-center gap-2 mb-2">
+                      <FileText className="w-4 h-4 text-green-600" />
+                      <span className="font-medium text-sm">
+                        Exams ({course.exams?.length || 0})
+                      </span>
+                    </div>
+                    {course.exams && course.exams.length > 0 ? (
+                      <div className="grid gap-2">
+                        {course.exams.map((exam) => (
+                          <div key={exam.id} className="bg-gray-50 p-3 rounded border">
+                            <div className="flex justify-between items-center">
+                              <span className="font-medium">{exam.name}</span>
+                              <span className="text-xs text-gray-500">
+                                {new Date(exam.created_at).toLocaleDateString()}
+                              </span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-sm text-gray-500 italic">No exams created for this course yet</p>
+                    )}
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
           )}
         </CardContent>
       </Card>

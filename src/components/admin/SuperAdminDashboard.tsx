@@ -6,7 +6,7 @@ import QualificationsManager from "./QualificationsManager";
 import BoardsManager from "./BoardsManager";
 import SubjectsManager from "./SubjectsManager";
 import CoursesManager from "./CoursesManager";
-import CreateExam from "../CreateExam";
+import ExamsManager from "./ExamsManager";
 import AdminSchools from "../../pages/admin/AdminSchools";
 import AdminUsers from "../../pages/admin/AdminUsers";
 
@@ -26,7 +26,7 @@ const SuperAdminDashboard = ({ onLogout }: SuperAdminDashboardProps) => {
         <Route path="/qualifications" element={<QualificationsManager />} />
         <Route path="/boards" element={<BoardsManager />} />
         <Route path="/courses" element={<CoursesManager />} />
-        <Route path="/exams" element={<CreateExam />} />
+        <Route path="/exams" element={<ExamsManager />} />
       </Routes>
     </SuperAdminLayout>
   );
