@@ -99,6 +99,8 @@ serve(async (req) => {
     const subject = courseData?.subjects?.name || 'General';
     const board = courseData?.boards?.name || 'AQA';
 
+    console.log('Course context:', { qualification, subject, board });
+
     // Prepare the evaluation prompt
     const systemPrompt = `You are an AI tutor and exam evaluator with expertise in UK qualifications such as ${board}, and ${qualification} across various boards (e.g., ${board}). You specialise in evaluating text-based student answers using subject-specific mark schemes and assessment objectives.
 
@@ -147,23 +149,57 @@ The response should not include any enclosing objects or extraneous delimiters l
 
 Do not include any formatting syntax such as triple quotes, code blocks, or any text outside the JSON object.`;
 
-    const examContext = JSON.stringify({
-      qualification: qualification,
-      subject: subject,
-      question_text: answerData.questions.text,
-      marks_allocated: answerData.questions.max_marks,
-      student_answer: answerData.text_answer || '',
-      question_image: answerData.questions.image_url || ''
-    });
+    // Prepare the user message content
+    const userContent = `{
+    "qualification": "${qualification}",
+    "subject": "${subject}",
+    "question_text": "${answerData.questions.text || ''}",
+    "marks_allocated": ${answerData.questions.max_marks || 0},
+    "student_answer": "${answerData.text_answer || ''}",
+    "question_image": "${answerData.questions.image_url || ''}"
+}`;
 
-    console.log('Calling OpenAI API with prompt...');
+    console.log('Calling OpenAI API with GPT-4o...');
+    console.log('User content:', userContent);
+
+    // Prepare messages array
+    const messages: any[] = [
+      {
+        role: "system",
+        content: systemPrompt
+      }
+    ];
+
+    // Add user message with image if available
+    if (answerData.questions.image_url) {
+      messages.push({
+        role: "user",
+        content: [
+          {
+            type: "text",
+            text: userContent
+          },
+          {
+            type: "image_url",
+            image_url: {
+              url: answerData.questions.image_url
+            }
+          }
+        ]
+      });
+    } else {
+      messages.push({
+        role: "user",
+        content: userContent
+      });
+    }
 
     // Set up abort controller with timeout
     const controller = new AbortController();
     const timeoutId = setTimeout(() => {
       console.log('Request timed out, aborting...');
       controller.abort();
-    }, 30000); // 30 second timeout
+    }, 45000); // 45 second timeout for GPT-4o
 
     let evaluation;
 
@@ -175,19 +211,10 @@ Do not include any formatting syntax such as triple quotes, code blocks, or any 
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          model: 'gpt-4o-mini',
-          messages: [
-            {
-              role: "system",
-              content: systemPrompt
-            },
-            {
-              role: "user",
-              content: examContext
-            }
-          ],
-          max_tokens: 800,
-          temperature: 0.3,
+          model: 'gpt-4o',
+          messages: messages,
+          max_tokens: 1000,
+          temperature: 0.2,
         }),
         signal: controller.signal,
       });
@@ -195,25 +222,29 @@ Do not include any formatting syntax such as triple quotes, code blocks, or any 
       clearTimeout(timeoutId);
 
       if (!openAIResponse.ok) {
-        throw new Error(`OpenAI API error: ${openAIResponse.status}`);
+        const errorText = await openAIResponse.text();
+        console.error('OpenAI API error:', openAIResponse.status, errorText);
+        throw new Error(`OpenAI API error: ${openAIResponse.status} - ${errorText}`);
       }
 
       const openAIData = await openAIResponse.json();
       
       if (!openAIData.choices?.[0]?.message?.content) {
+        console.error('Invalid OpenAI response structure:', openAIData);
         throw new Error('Invalid OpenAI response');
       }
 
-      const evaluationText = openAIData.choices[0].message.content;
+      const evaluationText = openAIData.choices[0].message.content.trim();
       console.log('OpenAI response received');
       console.log('Raw OpenAI response:', evaluationText);
 
       try {
         evaluation = JSON.parse(evaluationText);
-        console.log('Successfully parsed evaluation JSON');
+        console.log('Successfully parsed evaluation JSON:', evaluation);
       } catch (parseError) {
         console.error('JSON parse error:', parseError);
-        throw new Error('Failed to parse evaluation');
+        console.error('Raw response that failed to parse:', evaluationText);
+        throw new Error('Failed to parse evaluation JSON');
       }
 
     } catch (fetchError) {
