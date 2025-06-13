@@ -1,10 +1,10 @@
-
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Plus, Trash2, ArrowLeft } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
@@ -13,6 +13,12 @@ interface Question {
   text: string;
   image: File | null;
   maxMarks: number;
+}
+
+interface Exam {
+  id: string;
+  name: string;
+  created_at: string;
 }
 
 interface CreateExamProps {
@@ -26,8 +32,54 @@ const CreateExam = ({ onBack }: CreateExamProps) => {
   const [questions, setQuestions] = useState<Question[]>([
     { text: "", image: null, maxMarks: 10 }
   ]);
+  const [exams, setExams] = useState<Exam[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
+
+  useEffect(() => {
+    loadExams();
+  }, []);
+
+  const loadExams = async () => {
+    const { data, error } = await supabase
+      .from('exams')
+      .select('id, name, created_at')
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      toast({
+        title: "Error loading exams",
+        description: error.message,
+        variant: "destructive",
+      });
+    } else {
+      setExams(data || []);
+    }
+  };
+
+  const deleteExam = async (examId: string) => {
+    if (!confirm('Are you sure you want to delete this exam? This action cannot be undone.')) {
+      return;
+    }
+
+    const { error } = await supabase
+      .from('exams')
+      .delete()
+      .eq('id', examId);
+
+    if (error) {
+      toast({
+        title: "Error deleting exam",
+        description: error.message,
+        variant: "destructive",
+      });
+    } else {
+      toast({
+        title: "Exam deleted successfully",
+      });
+      loadExams(); // Refresh the list
+    }
+  };
 
   const addQuestion = () => {
     setQuestions([...questions, { text: "", image: null, maxMarks: 10 }]);
@@ -108,9 +160,10 @@ const CreateExam = ({ onBack }: CreateExamProps) => {
         description: `${examData.name} has been created with ${questions.length} questions.`,
       });
 
-      // Reset form
+      // Reset form and reload exams
       setExamData({ name: "" });
       setQuestions([{ text: "", image: null, maxMarks: 10 }]);
+      loadExams();
     } catch (error: any) {
       toast({
         title: "Error creating exam",
@@ -130,6 +183,47 @@ const CreateExam = ({ onBack }: CreateExamProps) => {
           Back
         </Button>
       )}
+
+      {/* Existing Exams List */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Existing Exams</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {exams.length === 0 ? (
+            <p className="text-gray-500">No exams created yet.</p>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Exam Name</TableHead>
+                  <TableHead>Created Date</TableHead>
+                  <TableHead>Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {exams.map((exam) => (
+                  <TableRow key={exam.id}>
+                    <TableCell>{exam.name}</TableCell>
+                    <TableCell>
+                      {new Date(exam.created_at).toLocaleDateString()}
+                    </TableCell>
+                    <TableCell>
+                      <Button
+                        variant="destructive"
+                        size="sm"
+                        onClick={() => deleteExam(exam.id)}
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
       
       <Card>
         <CardHeader>
