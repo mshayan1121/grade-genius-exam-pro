@@ -57,17 +57,90 @@ const CreateSchoolUser = ({ schools, userRole, currentUserSchoolId, onUserCreate
       // Use default password
       const defaultPassword = "123456";
       
+      // First check if user already exists
+      const { data: existingUser } = await supabase.auth.admin.getUserByEmail?.(email) || 
+        await supabase.from('user_roles').select('user_id').eq('user_id', email).single();
+      
+      if (existingUser) {
+        toast({
+          title: "User already exists",
+          description: "This email is already registered. Try a different email.",
+          variant: "destructive",
+        });
+        setIsLoading(false);
+        return;
+      }
+
       // Sign up the user using the regular signup flow
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email,
         password: defaultPassword,
         options: {
-          emailRedirectTo: `${window.location.origin}/`
+          emailRedirectTo: `${window.location.origin}/`,
+          data: {
+            email_confirm: true // Skip email confirmation for admin-created users
+          }
         }
       });
 
       if (authError) {
         console.error('Auth error:', authError);
+        if (authError.message.includes("User already registered")) {
+          // If user exists but doesn't have a role, just assign the role
+          console.log('User exists, trying to assign role...');
+          
+          // Try to get the existing user
+          const { data: existingAuthUser, error: getUserError } = await supabase.auth.signInWithPassword({
+            email,
+            password: defaultPassword,
+          });
+          
+          if (!getUserError && existingAuthUser.user) {
+            console.log('Found existing user:', existingAuthUser.user.id);
+            
+            // Check if they already have a role
+            const { data: existingRoles } = await supabase
+              .from('user_roles')
+              .select('*')
+              .eq('user_id', existingAuthUser.user.id);
+            
+            if (!existingRoles || existingRoles.length === 0) {
+              // Assign the role
+              const { error: roleError } = await supabase
+                .from('user_roles')
+                .insert({
+                  user_id: existingAuthUser.user.id,
+                  role: selectedRole as AppRole,
+                  school_id: selectedSchool
+                });
+
+              if (roleError) {
+                console.error('Role assignment error:', roleError);
+                throw roleError;
+              }
+
+              toast({
+                title: "User role assigned successfully",
+                description: `Role assigned to existing user ${email}. Password: ${defaultPassword}`,
+              });
+
+              setEmail("");
+              setSelectedRole("");
+              setSelectedSchool(currentUserSchoolId || "");
+              onUserCreated();
+              setIsLoading(false);
+              return;
+            } else {
+              toast({
+                title: "User already has a role",
+                description: "This user already exists and has been assigned a role.",
+                variant: "destructive",
+              });
+              setIsLoading(false);
+              return;
+            }
+          }
+        }
         throw authError;
       }
 
@@ -125,6 +198,8 @@ const CreateSchoolUser = ({ schools, userRole, currentUserSchoolId, onUserCreate
           {userRole === 'super_admin' 
             ? 'Create school admins, teachers, or students' 
             : 'Create teachers or students for your school'}
+          <br />
+          <span className="text-blue-600 font-medium">Default password: 123456</span>
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">

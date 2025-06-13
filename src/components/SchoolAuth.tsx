@@ -92,10 +92,26 @@ const SchoolAuth = ({ onAuthSuccess, onSwitchToSuperAdmin }: SchoolAuthProps) =>
 
       if (error) {
         console.error('Sign in error:', error);
+        
+        // More specific error handling
         if (error.message === "Invalid login credentials") {
+          // Check if user exists by trying to find their user_roles
+          const { data: userRoles, error: roleCheckError } = await supabase
+            .from('user_roles')
+            .select('*')
+            .eq('user_id', '00000000-0000-0000-0000-000000000000'); // This will fail, but we need to check differently
+          
+          console.log('Checking if user exists in our system...');
+          
           toast({
-            title: "Invalid credentials",
-            description: "Please check your email and password. For new users created by admin, the default password is 123456.",
+            title: "Login failed",
+            description: `Invalid email or password. If you were created by an admin, make sure you're using the correct email and the default password: 123456. If you're still having issues, contact your administrator.`,
+            variant: "destructive",
+          });
+        } else if (error.message.includes("Email not confirmed")) {
+          toast({
+            title: "Email not confirmed",
+            description: "Please check your email and click the confirmation link, or contact your administrator.",
             variant: "destructive",
           });
         } else {
@@ -162,7 +178,7 @@ const SchoolAuth = ({ onAuthSuccess, onSwitchToSuperAdmin }: SchoolAuthProps) =>
         await supabase.auth.signOut();
         toast({
           title: "Access Denied",
-          description: "You don't have the required school permissions. Please contact your administrator.",
+          description: "You don't have the required school permissions. Please contact your administrator to assign you a role.",
           variant: "destructive",
         });
         return;
@@ -194,7 +210,7 @@ const SchoolAuth = ({ onAuthSuccess, onSwitchToSuperAdmin }: SchoolAuthProps) =>
           </div>
           <CardTitle className="text-2xl">School Portal</CardTitle>
           <p className="text-sm text-gray-600">For school admins, teachers & students</p>
-          <p className="text-xs text-blue-600 mt-1">Default password for new users: 123456</p>
+          <p className="text-xs text-blue-600 mt-1 font-medium">Default password for new users: 123456</p>
         </CardHeader>
         <CardContent>
           <Tabs defaultValue="signin" className="w-full">
@@ -213,6 +229,7 @@ const SchoolAuth = ({ onAuthSuccess, onSwitchToSuperAdmin }: SchoolAuthProps) =>
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     required
+                    placeholder="Enter your email"
                   />
                 </div>
                 <div>
@@ -224,6 +241,7 @@ const SchoolAuth = ({ onAuthSuccess, onSwitchToSuperAdmin }: SchoolAuthProps) =>
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
                       required
+                      placeholder="Enter your password"
                     />
                     <Button
                       type="button"
@@ -235,6 +253,9 @@ const SchoolAuth = ({ onAuthSuccess, onSwitchToSuperAdmin }: SchoolAuthProps) =>
                       {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                     </Button>
                   </div>
+                  <p className="text-xs text-gray-500 mt-1">
+                    New users created by admin should use: 123456
+                  </p>
                 </div>
                 <Button type="submit" className="w-full" disabled={isLoading}>
                   {isLoading ? "Signing in..." : "Sign In"}
@@ -252,6 +273,7 @@ const SchoolAuth = ({ onAuthSuccess, onSwitchToSuperAdmin }: SchoolAuthProps) =>
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     required
+                    placeholder="Enter your email"
                   />
                 </div>
                 <div>
@@ -264,6 +286,7 @@ const SchoolAuth = ({ onAuthSuccess, onSwitchToSuperAdmin }: SchoolAuthProps) =>
                       onChange={(e) => setPassword(e.target.value)}
                       required
                       minLength={6}
+                      placeholder="Create a password"
                     />
                     <Button
                       type="button"
@@ -285,6 +308,7 @@ const SchoolAuth = ({ onAuthSuccess, onSwitchToSuperAdmin }: SchoolAuthProps) =>
                     onChange={(e) => setConfirmPassword(e.target.value)}
                     required
                     minLength={6}
+                    placeholder="Confirm your password"
                   />
                 </div>
                 <Button type="submit" className="w-full" disabled={isLoading}>
