@@ -10,11 +10,14 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { User } from '@supabase/supabase-js';
 import { ArrowLeft, Plus, Trash2, Building, Users } from "lucide-react";
+import type { Database } from "@/integrations/supabase/types";
+
+type AppRole = Database['public']['Enums']['app_role'];
 
 interface UserRole {
   id: string;
   user_id: string;
-  role: string;
+  role: AppRole;
   school_id: string | null;
   user_email?: string;
   school_name?: string;
@@ -38,7 +41,7 @@ const AdminDashboard = ({ onBack, currentUser }: AdminDashboardProps) => {
   const [schools, setSchools] = useState<School[]>([]);
   const [newSchool, setNewSchool] = useState({ name: "", address: "", contact_email: "", contact_phone: "" });
   const [selectedUser, setSelectedUser] = useState("");
-  const [selectedRole, setSelectedRole] = useState("");
+  const [selectedRole, setSelectedRole] = useState<AppRole | "">("");
   const [selectedSchool, setSelectedSchool] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const { toast } = useToast();
@@ -139,13 +142,13 @@ const AdminDashboard = ({ onBack, currentUser }: AdminDashboardProps) => {
     try {
       const roleData = {
         user_id: selectedUser,
-        role: selectedRole,
+        role: selectedRole as AppRole,
         school_id: selectedRole === 'super_admin' ? null : selectedSchool || null
       };
 
       const { error } = await supabase
         .from('user_roles')
-        .insert([roleData]);
+        .insert(roleData);
 
       if (error) throw error;
 
@@ -289,7 +292,7 @@ const AdminDashboard = ({ onBack, currentUser }: AdminDashboardProps) => {
               </div>
               <div>
                 <Label htmlFor="role-select">Role</Label>
-                <Select value={selectedRole} onValueChange={setSelectedRole}>
+                <Select value={selectedRole} onValueChange={(value: AppRole) => setSelectedRole(value)}>
                   <SelectTrigger>
                     <SelectValue placeholder="Select a role" />
                   </SelectTrigger>
