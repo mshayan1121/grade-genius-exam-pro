@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -71,12 +70,82 @@ const CreateSchoolUser = ({ schools, userRole, currentUserSchoolId, onUserCreate
 
       if (authError) {
         console.error('Auth error:', authError);
+        
         if (authError.message.includes("User already registered")) {
-          toast({
-            title: "User already exists",
-            description: "This email is already registered. The user may already have an account or role assigned.",
-            variant: "destructive",
+          // User exists, try to find them and assign role
+          console.log('User already exists, attempting to find and assign role...');
+          
+          // Try to sign in to get the user data
+          const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
+            email,
+            password: defaultPassword,
           });
+          
+          if (signInError) {
+            console.error('Could not sign in existing user:', signInError);
+            toast({
+              title: "User exists but cannot access",
+              description: "User already exists but we cannot access their account. They may have a different password.",
+              variant: "destructive",
+            });
+            setIsLoading(false);
+            return;
+          }
+          
+          if (signInData.user) {
+            console.log('Found existing user:', signInData.user.id);
+            
+            // Check if they already have this role
+            const { data: existingRoles } = await supabase
+              .from('user_roles')
+              .select('*')
+              .eq('user_id', signInData.user.id)
+              .eq('role', selectedRole)
+              .eq('school_id', selectedSchool);
+            
+            if (existingRoles && existingRoles.length > 0) {
+              toast({
+                title: "Role already assigned",
+                description: "This user already has this role for this school.",
+                variant: "destructive",
+              });
+              // Sign out the user we just signed in for checking
+              await supabase.auth.signOut();
+              setIsLoading(false);
+              return;
+            }
+            
+            // Assign the new role
+            const { error: roleError } = await supabase
+              .from('user_roles')
+              .insert({
+                user_id: signInData.user.id,
+                role: selectedRole as AppRole,
+                school_id: selectedSchool
+              });
+
+            // Sign out the user we just signed in for checking
+            await supabase.auth.signOut();
+
+            if (roleError) {
+              console.error('Role assignment error:', roleError);
+              throw roleError;
+            }
+
+            console.log('Role assigned to existing user successfully');
+
+            toast({
+              title: "Role assigned successfully",
+              description: `Role assigned to existing user ${email}. Password: ${defaultPassword}`,
+            });
+
+            setEmail("");
+            setSelectedRole("");
+            setSelectedSchool(currentUserSchoolId || "");
+            onUserCreated();
+            setIsLoading(false);
+            return;
+          }
         } else {
           throw authError;
         }
