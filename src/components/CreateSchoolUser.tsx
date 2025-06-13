@@ -55,7 +55,7 @@ const CreateSchoolUser = ({ schools, userRole, currentUserSchoolId, onUserCreate
       console.log('Creating user with email:', email, 'role:', selectedRole, 'school:', selectedSchool);
       
       // Use default password
-      const defaultPassword = "12345";
+      const defaultPassword = "123456";
       
       // Sign up the user using the regular signup flow
       const { data: authData, error: authError } = await supabase.auth.signUp({
