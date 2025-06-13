@@ -1,3 +1,4 @@
+
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -37,6 +38,31 @@ const CreateSchoolUser = ({ schools, userRole, currentUserSchoolId, onUserCreate
   const availableSchools = userRole === 'super_admin' 
     ? schools 
     : schools.filter(school => school.id === currentUserSchoolId);
+
+  // Helper function to wait for user to be created
+  const waitForUserCreation = async (userId: string, maxRetries = 5) => {
+    for (let i = 0; i < maxRetries; i++) {
+      try {
+        // Try to query the user roles table - this will fail if the user doesn't exist
+        const { error } = await supabase
+          .from('user_roles')
+          .select('id')
+          .eq('user_id', userId)
+          .limit(1);
+        
+        // If the query doesn't throw an error, the user exists
+        if (!error || !error.message.includes('violates foreign key constraint')) {
+          return true;
+        }
+      } catch (e) {
+        console.log(`Attempt ${i + 1}: User not ready yet, waiting...`);
+      }
+      
+      // Wait 1 second before next attempt
+      await new Promise(resolve => setTimeout(resolve, 1000));
+    }
+    return false;
+  };
 
   const handleCreateUser = async () => {
     if (!email || !selectedRole || !selectedSchool) {
@@ -158,6 +184,16 @@ const CreateSchoolUser = ({ schools, userRole, currentUserSchoolId, onUserCreate
       }
 
       console.log('User created successfully:', authData.user.id);
+
+      // Wait for the user to be properly created in the database
+      console.log('Waiting for user to be properly created...');
+      const userExists = await waitForUserCreation(authData.user.id);
+      
+      if (!userExists) {
+        throw new Error('User creation timed out - please try again');
+      }
+
+      console.log('User confirmed to exist, creating role...');
 
       // Now create the user role
       const { error: roleError } = await supabase
