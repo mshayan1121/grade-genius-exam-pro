@@ -9,10 +9,12 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
-      exams: {
+      courses: {
         Row: {
           board: string
           created_at: string
+          created_by: string | null
+          description: string | null
           id: string
           name: string
           qualification: string
@@ -21,6 +23,8 @@ export type Database = {
         Insert: {
           board: string
           created_at?: string
+          created_by?: string | null
+          description?: string | null
           id?: string
           name: string
           qualification: string
@@ -29,12 +33,43 @@ export type Database = {
         Update: {
           board?: string
           created_at?: string
+          created_by?: string | null
+          description?: string | null
           id?: string
           name?: string
           qualification?: string
           subject?: string
         }
         Relationships: []
+      }
+      exams: {
+        Row: {
+          course_id: string
+          created_at: string
+          id: string
+          name: string
+        }
+        Insert: {
+          course_id: string
+          created_at?: string
+          id?: string
+          name: string
+        }
+        Update: {
+          course_id?: string
+          created_at?: string
+          id?: string
+          name?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "exams_course_id_fkey"
+            columns: ["course_id"]
+            isOneToOne: false
+            referencedRelation: "courses"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       questions: {
         Row: {
@@ -74,6 +109,75 @@ export type Database = {
           },
         ]
       }
+      school_subscriptions: {
+        Row: {
+          course_id: string
+          expires_at: string | null
+          id: string
+          is_active: boolean
+          school_id: string
+          subscribed_at: string
+        }
+        Insert: {
+          course_id: string
+          expires_at?: string | null
+          id?: string
+          is_active?: boolean
+          school_id: string
+          subscribed_at?: string
+        }
+        Update: {
+          course_id?: string
+          expires_at?: string | null
+          id?: string
+          is_active?: boolean
+          school_id?: string
+          subscribed_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "school_subscriptions_course_id_fkey"
+            columns: ["course_id"]
+            isOneToOne: false
+            referencedRelation: "courses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "school_subscriptions_school_id_fkey"
+            columns: ["school_id"]
+            isOneToOne: false
+            referencedRelation: "schools"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      schools: {
+        Row: {
+          address: string | null
+          contact_email: string | null
+          contact_phone: string | null
+          created_at: string
+          id: string
+          name: string
+        }
+        Insert: {
+          address?: string | null
+          contact_email?: string | null
+          contact_phone?: string | null
+          created_at?: string
+          id?: string
+          name: string
+        }
+        Update: {
+          address?: string | null
+          contact_email?: string | null
+          contact_phone?: string | null
+          created_at?: string
+          id?: string
+          name?: string
+        }
+        Relationships: []
+      }
       student_answers: {
         Row: {
           evaluated_result: Json | null
@@ -112,15 +216,50 @@ export type Database = {
           },
         ]
       }
+      user_roles: {
+        Row: {
+          created_at: string
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          school_id: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          role: Database["public"]["Enums"]["app_role"]
+          school_id?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          school_id?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      has_role: {
+        Args: {
+          _user_id: string
+          _role: Database["public"]["Enums"]["app_role"]
+          _school_id?: string
+        }
+        Returns: boolean
+      }
     }
     Enums: {
-      [_ in never]: never
+      app_role:
+        | "super_admin"
+        | "school_admin"
+        | "school_teacher"
+        | "school_student"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -235,6 +374,13 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      app_role: [
+        "super_admin",
+        "school_admin",
+        "school_teacher",
+        "school_student",
+      ],
+    },
   },
 } as const

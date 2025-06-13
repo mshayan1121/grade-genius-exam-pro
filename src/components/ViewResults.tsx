@@ -21,7 +21,11 @@ interface StudentAnswer {
     question_order: number;
     exams: {
       name: string;
-      subject: string;
+      courses: {
+        subject: string;
+        board: string;
+        qualification: string;
+      };
     };
   };
 }
@@ -49,13 +53,18 @@ const ViewResults = ({ onBack }: ViewResultsProps) => {
           question_order,
           exams (
             name,
-            subject
+            courses (
+              subject,
+              board,
+              qualification
+            )
           )
         )
       `)
       .order('submitted_at', { ascending: false });
 
     if (error) {
+      console.error('Error loading submissions:', error);
       toast({
         title: "Error loading submissions",
         description: error.message,
@@ -168,7 +177,9 @@ const ViewResults = ({ onBack }: ViewResultsProps) => {
               <CardContent>
                 <p><strong>Name:</strong> {selectedSubmission.student_name}</p>
                 <p><strong>Exam:</strong> {selectedSubmission.questions.exams.name}</p>
-                <p><strong>Subject:</strong> {selectedSubmission.questions.exams.subject}</p>
+                <p><strong>Subject:</strong> {selectedSubmission.questions.exams.courses.subject}</p>
+                <p><strong>Board:</strong> {selectedSubmission.questions.exams.courses.board}</p>
+                <p><strong>Qualification:</strong> {selectedSubmission.questions.exams.courses.qualification}</p>
                 <p><strong>Submitted:</strong> {new Date(selectedSubmission.submitted_at).toLocaleString()}</p>
               </CardContent>
             </Card>
@@ -317,6 +328,9 @@ const ViewResults = ({ onBack }: ViewResultsProps) => {
                         <h3 className="font-semibold text-lg">{submission.student_name}</h3>
                         <p className="text-gray-600">
                           {submission.questions.exams.name} - Question {submission.questions.question_order}
+                        </p>
+                        <p className="text-sm text-gray-500">
+                          {submission.questions.exams.courses.subject} | {submission.questions.exams.courses.board}
                         </p>
                         <p className="text-sm text-gray-500">
                           {new Date(submission.submitted_at).toLocaleString()}
