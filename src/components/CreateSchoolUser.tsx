@@ -155,23 +155,21 @@ const CreateSchoolUser = ({ schools, userRole, currentUserSchoolId, onUserCreate
           </Select>
         </div>
 
-        {availableSchools.length > 1 && (
-          <div>
-            <Label htmlFor="school-select">School</Label>
-            <Select value={selectedSchool} onValueChange={setSelectedSchool}>
-              <SelectTrigger>
-                <SelectValue placeholder="Select a school" />
-              </SelectTrigger>
-              <SelectContent>
-                {availableSchools.map((school) => (
-                  <SelectItem key={school.id} value={school.id}>
-                    {school.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        )}
+        <div>
+          <Label htmlFor="school-select">School</Label>
+          <Select value={selectedSchool} onValueChange={setSelectedSchool}>
+            <SelectTrigger>
+              <SelectValue placeholder="Select a school" />
+            </SelectTrigger>
+            <SelectContent>
+              {availableSchools.map((school) => (
+                <SelectItem key={school.id} value={school.id}>
+                  {school.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
 
         <Button onClick={handleCreateUser} className="w-full" disabled={isLoading}>
           {isLoading ? "Creating user..." : "Create User"}
