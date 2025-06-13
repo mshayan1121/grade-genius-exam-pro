@@ -32,7 +32,12 @@ serve(async (req) => {
           image_url,
           max_marks,
           exams (
-            name
+            name,
+            courses (
+              qualifications (name),
+              subjects (name),
+              boards (name)
+            )
           )
         )
       `)
@@ -62,11 +67,11 @@ serve(async (req) => {
       
       // Create a fallback evaluation
       const fallbackEvaluation = {
-        score: Math.round(answerData.questions.max_marks * 0.5),
-        ideal_answer: "OpenAI API key not configured. Manual evaluation required.",
-        correct_points: "Automatic evaluation unavailable.",
-        incorrect_points: "Please configure OpenAI API key for AI evaluation.",
-        suggestions: "Contact administrator to enable AI evaluation."
+        marks_awarded: Math.round(answerData.questions.max_marks * 0.5),
+        positive_feedback: "OpenAI API key not configured. Manual evaluation required.",
+        constructive_feedback: "Please configure OpenAI API key for AI evaluation.",
+        model_answer: "Automatic evaluation unavailable.",
+        questionFeedback: "Pending"
       };
 
       const { error: updateError } = await supabase
@@ -88,37 +93,67 @@ serve(async (req) => {
       );
     }
 
+    // Extract course details
+    const qualification = answerData.questions.exams.courses.qualifications?.name || 'GCSE';
+    const subject = answerData.questions.exams.courses.subjects?.name || 'General';
+    const board = answerData.questions.exams.courses.boards?.name || 'AQA';
+
     // Prepare the comprehensive evaluation prompt
-    const systemPrompt = `You are an experienced teacher and examiner. Your task is to evaluate a student's answer to an exam question fairly and constructively.
+    const systemPrompt = `You are an AI tutor and exam evaluator with expertise in UK qualifications such as ${board}, and ${qualification} across various boards (e.g., ${board}). You specialise in evaluating text-based student answers using subject-specific mark schemes and assessment objectives.
 
-Please analyze the student's response and provide a detailed evaluation in the following JSON format:
+You must use your internal knowledge of appropriate mark schemes for the given qualification, exam board, and subject — but do **not** explicitly mention the board or qualification in your response.
+Ensure all feedback is **strictly relevant to the scope of the given qualification, board, and subject only**.
+Do **not** reference topics, expectations, or standards outside the level or curriculum of the provided context.
 
+---
+
+**Evaluation Rules**:
+1. Mark the student answer out of the total marks available.
+2. For sciences, use AO1 (Knowledge), AO2 (Application), AO3 (Analysis/Evaluation).
+   For Business and Economics, use AO1 (Knowledge), AO2 (Application), AO3 (Analysis), AO4 (Evaluation).
+   Label each point in the feedback with the correct AO based on the subject.
+3. Use the qualification, board, and subject to adapt your expectations appropriately.
+4. Award **partial credit** for valid points, methods, or reasoning — even if incomplete.
+5. **Be fair, but not too lenient**:
+   - Award marks only when the student shows real understanding or meets an expected marking point.
+   - Do **not** give marks for vague guesses, off-topic responses, or unrelated filler.
+6. If an image or diagram is provided, interpret it as part of the question and use it in your evaluation. Do not ignore it. Do not mention the image explicitly in your output.
+
+---
+
+**Feedback Style Requirements**:
+- Avoid generic exclamations like "Excellent job" or "Well done."
+- Give concise feedback that is 2–3 sentences each for:
+  - **positive_feedback** (focusing on specific strengths),
+  - **constructive_feedback** (focusing on specific improvements).
+- Provide a brief **model_answer** or key points for an ideal response.
+- **questionFeedback:[Correct, In-Correct or Partially Correct, Pending(if student has not answered)]
+
+---
+
+**Output Format**:
+Return valid JSON with the structure:
 {
-  "score": number (between 0 and the maximum marks available),
-  "ideal_answer": "A comprehensive model answer that demonstrates what a full-marks response should include",
-  "correct_points": "Detailed analysis of what the student got right, including specific concepts, facts, or reasoning that were accurate",
-  "incorrect_points": "Detailed analysis of what was wrong, missing, or could be improved, with specific explanations",
-  "suggestions": "Constructive advice on how the student can improve their understanding and answer quality for similar questions in the future"
+    "marks_awarded": number,
+    "positive_feedback": "...",
+    "constructive_feedback": "...",
+    "model_answer": "...",
+    "questionFeedback": "..."
 }
 
-When scoring:
-- Award full marks for complete, accurate, and well-explained answers
-- Give partial credit for partially correct responses
-- Consider both factual accuracy and quality of explanation
-- Be fair but maintain academic standards
-- Provide specific, actionable feedback`;
+Do not include any enclosing objects, extraneous delimiters like triple quotes, or any additional text outside the JSON object.
+The response should not include any enclosing objects or extraneous delimiters like \`\`\`json etc.
 
-    const examContext = `
-EXAM: ${answerData.questions.exams.name}
-MAXIMUM MARKS AVAILABLE: ${answerData.questions.max_marks}
+Do not include any formatting syntax such as triple quotes, code blocks, or any text outside the JSON object.`;
 
-QUESTION:
-${answerData.questions.text}
-
-STUDENT'S ANSWER:
-${answerData.text_answer || 'No text answer provided'}
-
-Please evaluate this answer according to the instructions above.`;
+    const examContext = JSON.stringify({
+      qualification: qualification,
+      subject: subject,
+      question_text: answerData.questions.text,
+      marks_allocated: answerData.questions.max_marks,
+      student_answer: answerData.text_answer || '',
+      question_image: answerData.questions.image_url || ''
+    });
 
     console.log('Calling OpenAI API with comprehensive prompt...');
 
@@ -186,21 +221,21 @@ Please evaluate this answer according to the instructions above.`;
       
       // Create fallback evaluation on API failure
       evaluation = {
-        score: Math.round(answerData.questions.max_marks * 0.6),
-        ideal_answer: "AI evaluation failed. Manual review required.",
-        correct_points: "Automatic evaluation encountered an error.",
-        incorrect_points: "Please retry evaluation or review manually.",
-        suggestions: "Contact support if this error persists."
+        marks_awarded: Math.round(answerData.questions.max_marks * 0.6),
+        positive_feedback: "AI evaluation failed. Manual review required.",
+        constructive_feedback: "Please retry evaluation or review manually.",
+        model_answer: "Automatic evaluation encountered an error.",
+        questionFeedback: "Pending"
       };
     }
 
     // Validate and constrain score
-    if (typeof evaluation.score !== 'number' || evaluation.score < 0) {
-      evaluation.score = 0;
+    if (typeof evaluation.marks_awarded !== 'number' || evaluation.marks_awarded < 0) {
+      evaluation.marks_awarded = 0;
     }
-    evaluation.score = Math.min(evaluation.score, answerData.questions.max_marks);
+    evaluation.marks_awarded = Math.min(evaluation.marks_awarded, answerData.questions.max_marks);
 
-    console.log('Final evaluation score:', evaluation.score);
+    console.log('Final evaluation score:', evaluation.marks_awarded);
 
     // Update the student answer with evaluation results
     const { error: updateError } = await supabase
