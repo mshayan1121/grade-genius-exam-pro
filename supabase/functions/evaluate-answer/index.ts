@@ -101,105 +101,49 @@ serve(async (req) => {
 
     console.log('Course context:', { qualification, subject, board });
 
-    // Prepare the evaluation prompt
-    const systemPrompt = `You are an AI tutor and exam evaluator with expertise in UK qualifications such as ${board}, and ${qualification} across various boards (e.g., ${board}). You specialise in evaluating text-based student answers using subject-specific mark schemes and assessment objectives.
+    // Simplified, faster prompt
+    const systemPrompt = `You are an AI exam evaluator. Evaluate this ${qualification} ${subject} answer and return JSON only.
 
-You must use your internal knowledge of appropriate mark schemes for the given qualification, exam board, and subject — but do **not** explicitly mention the board or qualification in your response.
-Ensure all feedback is **strictly relevant to the scope of the given qualification, board, and subject only**.
-Do **not** reference topics, expectations, or standards outside the level or curriculum of the provided context.
+Rules:
+- Mark out of ${answerData.questions.max_marks} total marks
+- Award partial credit for valid points
+- Be fair but not too lenient
+- Use ${subject} marking criteria
 
----
-
-**Evaluation Rules**:
-1. Mark the student answer out of the total marks available.
-2. For sciences, use AO1 (Knowledge), AO2 (Application), AO3 (Analysis/Evaluation).
-   For Business and Economics, use AO1 (Knowledge), AO2 (Application), AO3 (Analysis), AO4 (Evaluation).
-   Label each point in the feedback with the correct AO based on the subject.
-3. Use the qualification, board, and subject to adapt your expectations appropriately.
-4. Award **partial credit** for valid points, methods, or reasoning — even if incomplete.
-5. **Be fair, but not too lenient**:
-   - Award marks only when the student shows real understanding or meets an expected marking point.
-   - Do **not** give marks for vague guesses, off-topic responses, or unrelated filler.
-6. If an image or diagram is provided, interpret it as part of the question and use it in your evaluation. Do not ignore it. Do not mention the image explicitly in your output.
-
----
-
-**Feedback Style Requirements**:
-- Avoid generic exclamations like "Excellent job" or "Well done."
-- Give concise feedback that is 2–3 sentences each for:
-  - **positive_feedback** (focusing on specific strengths),
-  - **constructive_feedback** (focusing on specific improvements).
-- Provide a brief **model_answer** or key points for an ideal response.
-- **questionFeedback:[Correct, In-Correct or Partially Correct, Pending(if student has not answered)]
-
----
-
-**Output Format**:
-Return valid JSON with the structure:
+Required JSON format (no other text):
 {
-    "marks_awarded": number,
-    "positive_feedback": "...",
-    "constructive_feedback": "...",
-    "model_answer": "...",
-    "questionFeedback": "..."
-}
-
-Do not include any enclosing objects, extraneous delimiters like triple quotes, or any additional text outside the JSON object.
-The response should not include any enclosing objects or extraneous delimiters like \`\`\`json etc.
-
-Do not include any formatting syntax such as triple quotes, code blocks, or any text outside the JSON object.`;
-
-    // Prepare the user message content
-    const userContent = `{
-    "qualification": "${qualification}",
-    "subject": "${subject}",
-    "question_text": "${answerData.questions.text || ''}",
-    "marks_allocated": ${answerData.questions.max_marks || 0},
-    "student_answer": "${answerData.text_answer || ''}",
-    "question_image": "${answerData.questions.image_url || ''}"
+  "marks_awarded": number,
+  "positive_feedback": "brief positive points",
+  "constructive_feedback": "brief improvements needed", 
+  "model_answer": "key points for ideal answer",
+  "questionFeedback": "Correct/Incorrect/Partially Correct"
 }`;
 
-    console.log('Calling OpenAI API with GPT-4o...');
-    console.log('User content:', userContent);
-
-    // Prepare messages array
-    const messages: any[] = [
-      {
-        role: "system",
-        content: systemPrompt
+    // Prepare messages
+    const messages = [
+      { role: "system", content: systemPrompt },
+      { 
+        role: "user", 
+        content: `Question: ${answerData.questions.text}\nStudent Answer: ${answerData.text_answer || 'No answer provided'}\nMarks: ${answerData.questions.max_marks}` 
       }
     ];
 
-    // Add user message with image if available
+    // Add image if available
     if (answerData.questions.image_url) {
-      messages.push({
-        role: "user",
-        content: [
-          {
-            type: "text",
-            text: userContent
-          },
-          {
-            type: "image_url",
-            image_url: {
-              url: answerData.questions.image_url
-            }
-          }
-        ]
-      });
-    } else {
-      messages.push({
-        role: "user",
-        content: userContent
-      });
+      messages[1].content = [
+        { type: "text", text: messages[1].content },
+        { type: "image_url", image_url: { url: answerData.questions.image_url } }
+      ];
     }
 
-    // Set up abort controller with timeout
+    console.log('Calling OpenAI API...');
+
+    // Set shorter timeout for faster response
     const controller = new AbortController();
     const timeoutId = setTimeout(() => {
       console.log('Request timed out, aborting...');
       controller.abort();
-    }, 45000); // 45 second timeout for GPT-4o
+    }, 20000); // 20 second timeout
 
     let evaluation;
 
@@ -211,10 +155,10 @@ Do not include any formatting syntax such as triple quotes, code blocks, or any 
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          model: 'gpt-4o',
+          model: 'gpt-4o-mini', // Using faster model
           messages: messages,
-          max_tokens: 1000,
-          temperature: 0.2,
+          max_tokens: 500, // Reduced for faster response
+          temperature: 0.1, // Lower for more consistent output
         }),
         signal: controller.signal,
       });
@@ -224,7 +168,7 @@ Do not include any formatting syntax such as triple quotes, code blocks, or any 
       if (!openAIResponse.ok) {
         const errorText = await openAIResponse.text();
         console.error('OpenAI API error:', openAIResponse.status, errorText);
-        throw new Error(`OpenAI API error: ${openAIResponse.status} - ${errorText}`);
+        throw new Error(`OpenAI API error: ${openAIResponse.status}`);
       }
 
       const openAIData = await openAIResponse.json();
@@ -236,15 +180,24 @@ Do not include any formatting syntax such as triple quotes, code blocks, or any 
 
       const evaluationText = openAIData.choices[0].message.content.trim();
       console.log('OpenAI response received');
-      console.log('Raw OpenAI response:', evaluationText);
 
       try {
-        evaluation = JSON.parse(evaluationText);
-        console.log('Successfully parsed evaluation JSON:', evaluation);
+        // Clean up response if it has extra formatting
+        const cleanText = evaluationText.replace(/```json\n?|\n?```/g, '').trim();
+        evaluation = JSON.parse(cleanText);
+        console.log('Successfully parsed evaluation');
       } catch (parseError) {
         console.error('JSON parse error:', parseError);
-        console.error('Raw response that failed to parse:', evaluationText);
-        throw new Error('Failed to parse evaluation JSON');
+        console.error('Raw response:', evaluationText);
+        
+        // Create fallback evaluation
+        evaluation = {
+          marks_awarded: Math.round(answerData.questions.max_marks * 0.6),
+          positive_feedback: "Answer evaluation completed but response parsing failed.",
+          constructive_feedback: "Please review manually for detailed feedback.",
+          model_answer: "Automatic model answer generation failed.",
+          questionFeedback: "Pending"
+        };
       }
 
     } catch (fetchError) {
